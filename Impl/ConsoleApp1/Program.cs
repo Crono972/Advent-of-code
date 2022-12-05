@@ -53,9 +53,15 @@ void Move(List<Stack<char>> towers, int qty, int from, int to)
 {
     var fromTower = towers[from - 1];
     var toTower = towers[to - 1];
+    var localStack = new Stack<char>();
     for (int i = 0; i < qty; i++)
     {
         var elt = fromTower.Pop();
+        localStack.Push(elt);
+    }
+
+    while (localStack.TryPop(out var elt))
+    {
         toTower.Push(elt);
     }
 }
