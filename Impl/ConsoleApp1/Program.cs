@@ -1,20 +1,31 @@
-﻿// See https://aka.ms/new-console-template for more information
-
-var str = File.ReadAllLines(@"../../../../../2022/Exo06/input.txt");
-
-var line = str.Single();
-//var line = "mjqjpqmgbljsphdztnvjfqwrcgsmlb";
-for (int i = 0; i < line.Length; i++)
+﻿namespace MyProject;
+class Program
 {
-    var hashSet = new HashSet<char>();
-    for (int j = 0; j < 14; j++)
+    static readonly Random rand = new Random();
+    static void Main(string[] args)
     {
-        hashSet.Add(line[i + j]);
+        var outSideCircle = 0;
+        var insideCircle = 0;
+        for (int i = 0; i < 10_000; i++)
+        {
+            (double x, double y) point = (RandomGenerator(), RandomGenerator());
+            if (Math.Pow(point.x, 2) + Math.Pow(point.y, 2) < 1)
+            {
+                insideCircle++;
+            }
+            else
+            {
+                outSideCircle++;
+            }
+        }
+
+        var pi = 4d * insideCircle / (insideCircle + outSideCircle);
+        Console.WriteLine(pi);
+        Console.ReadLine();
     }
-    if (hashSet.Count == 14)
+
+    static double RandomGenerator()
     {
-        Console.WriteLine(i + 14);
-        break;
+        return rand.NextDouble();
     }
 }
-Console.ReadKey();
