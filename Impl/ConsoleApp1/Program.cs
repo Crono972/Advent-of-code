@@ -3,20 +3,17 @@
 var str = File.ReadAllLines(@"../../../../../2022/Exo06/input.txt");
 
 var line = str.Single();
+//var line = "mjqjpqmgbljsphdztnvjfqwrcgsmlb";
 for (int i = 0; i < line.Length; i++)
 {
-    var a = line[i];
-    var b = line[i + 1];
-    var c = line[i + 2];
-    var d = line[i + 3];
     var hashSet = new HashSet<char>();
-    hashSet.Add(a);
-    hashSet.Add(b);
-    hashSet.Add(c);
-    hashSet.Add(d);
-    if (hashSet.Count == 4)
+    for (int j = 0; j < 14; j++)
     {
-        Console.WriteLine(i + 4);
+        hashSet.Add(line[i + j]);
+    }
+    if (hashSet.Count == 14)
+    {
+        Console.WriteLine(i + 14);
         break;
     }
 }
