@@ -1,31 +1,59 @@
-﻿namespace MyProject;
-class Program
+﻿// See https://aka.ms/new-console-template for more information
+
+//var lines = File.ReadAllLines(@"../../../../../2022/Exo07/sample.txt");
+var lines = File.ReadAllLines(@"../../../../../2022/Exo07/input.txt");
+var currentDirectoryPath = new Stack<string>();
+var files = new List<(string path, int size)>();
+
+foreach (var line in lines)
 {
-    static readonly Random rand = new Random();
-    static void Main(string[] args)
+    if (line.StartsWith("$ cd"))
     {
-        var outSideCircle = 0;
-        var insideCircle = 0;
-        for (int i = 0; i < 10_000; i++)
+        var directoryArg = line.Substring(5);
+        if (directoryArg == "..")
         {
-            (double x, double y) point = (RandomGenerator(), RandomGenerator());
-            if (Math.Pow(point.x, 2) + Math.Pow(point.y, 2) < 1)
-            {
-                insideCircle++;
-            }
-            else
-            {
-                outSideCircle++;
-            }
+            currentDirectoryPath.Pop();
         }
-
-        var pi = 4d * insideCircle / (insideCircle + outSideCircle);
-        Console.WriteLine(pi);
-        Console.ReadLine();
+        else
+        {
+            currentDirectoryPath.Push(directoryArg);
+        }
+        continue;
     }
 
-    static double RandomGenerator()
+    if (line.StartsWith("$ ls") || line.StartsWith("dir"))
     {
-        return rand.NextDouble();
+        continue;
     }
+    var split = line.Split(' ');
+    var size = int.Parse(split[0]);
+    var path = $"{Pwd(currentDirectoryPath)}/{split[1]}";
+    files.Add((path, size));
+}
+
+var folderSize = new Dictionary<string, int>();
+foreach (var file in files)
+{
+    var folders = file.path.Substring(1).Split('/');
+    foreach (var folder in folders.SkipLast(1))
+    {
+        if (!folderSize.ContainsKey(folder))
+        {
+            folderSize.Add(folder, file.size);
+        }
+        else
+        {
+            folderSize[folder] += file.size;
+        }
+    }
+}
+
+var exo1 = folderSize.Where(v => v.Value <= 100_000).Sum(d => d.Value);
+Console.WriteLine(exo1);
+Console.ReadKey();
+
+string Pwd(Stack<string> currentDirectoryPathStack)
+{
+    var path = currentDirectoryPathStack.ToArray().Reverse();
+    return string.Join("/", path);
 }
