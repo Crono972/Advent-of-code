@@ -1,4 +1,4 @@
-﻿// See https://aka.ms/new-console-template for more information
+// See https://aka.ms/new-console-template for more information
 
 //var lines = File.ReadAllLines(@"../../../../../2022/Exo07/sample.txt");
 var lines = File.ReadAllLines(@"../../../../../2022/Exo07/input.txt");
@@ -31,19 +31,26 @@ foreach (var line in lines)
     files.Add((path, size));
 }
 
+
 var folderSize = new Dictionary<string, int>();
 foreach (var file in files)
 {
-    var folders = file.path.Substring(1).Split('/');
-    foreach (var folder in folders.SkipLast(1))
+    var foldersTemp = file.path.Substring(1).Split('/').SkipLast(1).ToList();
+
+    for (int i = 0; i < foldersTemp.Count; i++)
     {
-        if (!folderSize.ContainsKey(folder))
+        var folderName = string.Empty;
+        for (int j = 0; j <= i; j++)
         {
-            folderSize.Add(folder, file.size);
+            folderName += "\\" + foldersTemp[j];
+        }
+        if (!folderSize.ContainsKey(folderName))
+        {
+            folderSize.Add(folderName, file.size);
         }
         else
         {
-            folderSize[folder] += file.size;
+            folderSize[folderName] += file.size;
         }
     }
 }
