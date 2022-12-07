@@ -55,8 +55,18 @@ foreach (var file in files)
     }
 }
 
-var exo1 = folderSize.Where(v => v.Value <= 100_000).Sum(d => d.Value);
-Console.WriteLine(exo1);
+var totalDisk = 70_000_000;
+var usedSpace = folderSize["\\"];
+var spaceForUpdate = 30_000_000;
+var currentFreeSpace = totalDisk - usedSpace;
+var needToFree = spaceForUpdate - currentFreeSpace;
+
+var space = folderSize
+    .OrderBy(d => d.Value)
+    .First(d => d.Value > needToFree).Value;
+
+Console.WriteLine(space);
+
 Console.ReadKey();
 
 string Pwd(Stack<string> currentDirectoryPathStack)
