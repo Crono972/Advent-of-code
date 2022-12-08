@@ -1,76 +1,43 @@
 // See https://aka.ms/new-console-template for more information
 
-//var lines = File.ReadAllLines(@"../../../../../2022/Exo07/sample.txt");
-var lines = File.ReadAllLines(@"../../../../../2022/Exo07/input.txt");
-var currentDirectoryPath = new Stack<string>();
-var files = new List<(string path, int size)>();
+//var lines = File.ReadAllLines(@"../../../../../2022/Exo08/sample.txt");
+var lines = File.ReadAllLines(@"../../../../../2022/Exo08/input.txt");
 
-foreach (var line in lines)
+var visibility = 0;
+for (int i = 0; i < lines.Length; i++)
 {
-    if (line.StartsWith("$ cd"))
+    var row = lines[i];
+    for (int j = 0; j < row.Length; j++)
     {
-        var directoryArg = line.Substring(5);
-        if (directoryArg == "..")
+        var currentTree = int.Parse(lines[i][j].ToString());
+        if (j == 0 || i == 0 || i == lines.Length - 1 || j == row.Length - 1) //edge
         {
-            currentDirectoryPath.Pop();
+            visibility++;
         }
         else
         {
-            currentDirectoryPath.Push(directoryArg);
+            var currentRowIndex = i;
+            var currentColumnIndex = j;
+            var hautMax = lines
+                .SelectMany((s, rowIndex) => s.Where((c, columnIndex) => columnIndex == currentColumnIndex && rowIndex < currentRowIndex))
+                .Select(ch => int.Parse(ch.ToString())).Max();
+            var basMax = lines
+                .SelectMany((s, rowIndex) => s.Where((c, columnIndex) => columnIndex == currentColumnIndex && rowIndex > currentRowIndex))
+                .Select(ch => int.Parse(ch.ToString())).Max();
+            var gaucheMax = lines
+                .SelectMany((s, rowIndex) => s.Where((c, columnIndex) => columnIndex < currentColumnIndex && rowIndex == currentRowIndex))
+                .Select(ch => int.Parse(ch.ToString())).Max();
+            var droiteMax = lines
+                .SelectMany((s, rowIndex) => s.Where((c, columnIndex) => columnIndex > currentColumnIndex && rowIndex == currentRowIndex))
+                .Select(ch => int.Parse(ch.ToString())).Max();
+            if (currentTree > hautMax || currentTree > basMax || currentTree > gaucheMax || currentTree > droiteMax)
+            {
+                visibility++;
+            }
         }
-        continue;
-    }
 
-    if (line.StartsWith("$ ls") || line.StartsWith("dir"))
-    {
-        continue;
-    }
-    var split = line.Split(' ');
-    var size = int.Parse(split[0]);
-    var path = $"{Pwd(currentDirectoryPath)}/{split[1]}";
-    files.Add((path, size));
-}
-
-
-var folderSize = new Dictionary<string, int>();
-foreach (var file in files)
-{
-    var foldersTemp = file.path.Substring(1).Split('/').SkipLast(1).ToList();
-
-    for (int i = 0; i < foldersTemp.Count; i++)
-    {
-        var folderName = string.Empty;
-        for (int j = 0; j <= i; j++)
-        {
-            folderName += "\\" + foldersTemp[j];
-        }
-        if (!folderSize.ContainsKey(folderName))
-        {
-            folderSize.Add(folderName, file.size);
-        }
-        else
-        {
-            folderSize[folderName] += file.size;
-        }
     }
 }
 
-var totalDisk = 70_000_000;
-var usedSpace = folderSize["\\"];
-var spaceForUpdate = 30_000_000;
-var currentFreeSpace = totalDisk - usedSpace;
-var needToFree = spaceForUpdate - currentFreeSpace;
-
-var space = folderSize
-    .OrderBy(d => d.Value)
-    .First(d => d.Value > needToFree).Value;
-
-Console.WriteLine(space);
-
+Console.WriteLine(visibility);
 Console.ReadKey();
-
-string Pwd(Stack<string> currentDirectoryPathStack)
-{
-    var path = currentDirectoryPathStack.ToArray().Reverse();
-    return string.Join("/", path);
-}
