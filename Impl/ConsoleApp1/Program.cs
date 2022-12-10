@@ -1,43 +1,57 @@
 // See https://aka.ms/new-console-template for more information
 
-//var lines = File.ReadAllLines(@"../../../../../2022/Exo08/sample.txt");
-var lines = File.ReadAllLines(@"../../../../../2022/Exo08/input.txt");
+//var lines = File.ReadAllLines(@"../../../../../2022/Exo10/sample.txt");
+var lines = File.ReadAllLines(@"../../../../../2022/Exo10/input.txt");
 
-var visibility = 0;
+var cycle = 0;
+var currentSignalStrenght = 1;
+
+var signalStrenghts = new Dictionary<int, int>();
+
 for (int i = 0; i < lines.Length; i++)
 {
-    var row = lines[i];
-    for (int j = 0; j < row.Length; j++)
+    var currentLine = lines[i];
+    if (currentLine.Contains("noop"))
     {
-        var currentTree = int.Parse(lines[i][j].ToString());
-        if (j == 0 || i == 0 || i == lines.Length - 1 || j == row.Length - 1) //edge
+        cycle++;
+    }
+    else
+    {
+        if (currentLine.Contains("addx"))
         {
-            visibility++;
-        }
-        else
-        {
-            var currentRowIndex = i;
-            var currentColumnIndex = j;
-            var hautMax = lines
-                .SelectMany((s, rowIndex) => s.Where((c, columnIndex) => columnIndex == currentColumnIndex && rowIndex < currentRowIndex))
-                .Select(ch => int.Parse(ch.ToString())).Max();
-            var basMax = lines
-                .SelectMany((s, rowIndex) => s.Where((c, columnIndex) => columnIndex == currentColumnIndex && rowIndex > currentRowIndex))
-                .Select(ch => int.Parse(ch.ToString())).Max();
-            var gaucheMax = lines
-                .SelectMany((s, rowIndex) => s.Where((c, columnIndex) => columnIndex < currentColumnIndex && rowIndex == currentRowIndex))
-                .Select(ch => int.Parse(ch.ToString())).Max();
-            var droiteMax = lines
-                .SelectMany((s, rowIndex) => s.Where((c, columnIndex) => columnIndex > currentColumnIndex && rowIndex == currentRowIndex))
-                .Select(ch => int.Parse(ch.ToString())).Max();
-            if (currentTree > hautMax || currentTree > basMax || currentTree > gaucheMax || currentTree > droiteMax)
+            var valueIncr = int.Parse(currentLine.Split(" ")[1]);
+            
+            //1st cycle
+            cycle++;
+            if ((cycle - 20) % 40 == 0)
             {
-                visibility++;
+                if (!signalStrenghts.ContainsKey(cycle))
+                {
+                    signalStrenghts[cycle] = currentSignalStrenght;
+                }
             }
-        }
+            //2nd cycle
+            cycle++;
+            if ((cycle - 20) % 40 == 0)
+            {
+                if (!signalStrenghts.ContainsKey(cycle))
+                {
+                    signalStrenghts[cycle] = currentSignalStrenght;
+                }
+            }
 
+            currentSignalStrenght += valueIncr;
+        }
+    }
+
+    if ((cycle - 20) % 40 == 0)
+    {
+        if (!signalStrenghts.ContainsKey(cycle))
+        {
+            signalStrenghts[cycle] = currentSignalStrenght;
+        }
     }
 }
 
-Console.WriteLine(visibility);
+Console.WriteLine(signalStrenghts.Sum(kp => kp.Key * kp.Value));
 Console.ReadKey();
