@@ -3,55 +3,64 @@
 //var lines = File.ReadAllLines(@"../../../../../2022/Exo10/sample.txt");
 var lines = File.ReadAllLines(@"../../../../../2022/Exo10/input.txt");
 
-var cycle = 0;
-var currentSignalStrenght = 1;
-
-var signalStrenghts = new Dictionary<int, int>();
+var q = new List<(int cycle, int val)>();
 
 for (int i = 0; i < lines.Length; i++)
 {
-    var currentLine = lines[i];
-    if (currentLine.Contains("noop"))
+    var prog = lines[i].Split(" ");
+    var instr = prog[0];
+    var val = prog.Length > 1 ? int.Parse(prog[1]) : 0;
+    var cycle = q.Count > 0 ? q[^1].cycle : 0;
+
+    if (instr == "noop")
     {
-        cycle++;
+        q.Add((cycle + 1, 0));
     }
     else
     {
-        if (currentLine.Contains("addx"))
-        {
-            var valueIncr = int.Parse(currentLine.Split(" ")[1]);
-            
-            //1st cycle
-            cycle++;
-            if ((cycle - 20) % 40 == 0)
-            {
-                if (!signalStrenghts.ContainsKey(cycle))
-                {
-                    signalStrenghts[cycle] = currentSignalStrenght;
-                }
-            }
-            //2nd cycle
-            cycle++;
-            if ((cycle - 20) % 40 == 0)
-            {
-                if (!signalStrenghts.ContainsKey(cycle))
-                {
-                    signalStrenghts[cycle] = currentSignalStrenght;
-                }
-            }
-
-            currentSignalStrenght += valueIncr;
-        }
-    }
-
-    if ((cycle - 20) % 40 == 0)
-    {
-        if (!signalStrenghts.ContainsKey(cycle))
-        {
-            signalStrenghts[cycle] = currentSignalStrenght;
-        }
+        q.Add((cycle + 1, 0));
+        q.Add((cycle + 2, val));
     }
 }
 
-Console.WriteLine(signalStrenghts.Sum(kp => kp.Key * kp.Value));
+var samplecycles = new HashSet<int> { 20, 60, 100, 140, 180, 220 };
+int res = 0;
+int reg = 1;
+bool[,] screen = new bool[6, 40];
+
+for (int i = 0; i < q.Count; i++)
+{
+    var cur = q[i];
+
+    if (samplecycles.Contains(cur.cycle))
+    {
+        res += (cur.cycle * reg);
+    }
+
+    int curpos = (cur.cycle - 1) % 40;
+
+    if (curpos >= reg - 1 && curpos <= reg + 1)
+    {
+        screen[(cur.cycle - 1) / 40, (cur.cycle - 1) % 40] = true;
+    }
+
+    reg += cur.val;
+}
+
+// Part1 result
+Console.WriteLine(res);
+
+// Draw part2
+for (int i = 0; i < screen.GetLength(0); i++)
+{
+    for (int j = 0; j < screen.GetLength(1); j++)
+    {
+        if (screen[i, j])
+            Console.Write("#");
+        else Console.Write(".");
+    }
+
+    Console.WriteLine();
+}
+
 Console.ReadKey();
