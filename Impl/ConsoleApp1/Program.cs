@@ -1,65 +1,93 @@
 // See https://aka.ms/new-console-template for more information
 
-//var lines = File.ReadAllLines(@"../../../../../2022/Exo10/sample.txt");
-var lines = File.ReadAllLines(@"../../../../../2022/Exo09/input.txt");
-Dictionary<string, int> tailCoordsVisitedP1 = new Dictionary<string, int>();
-Dictionary<string, int> tailCoordsVisitedP2 = new Dictionary<string, int>();
-Dictionary<int, int[]> knotPositions = new Dictionary<int, int[]>() {
-            {0, new int[] { 0,0} }, {1, new int[] { 0,0} }, {2, new int[] { 0,0} }, {3, new int[] { 0,0} }, {4, new int[] { 0,0} },
-            {5, new int[] { 0,0} }, {6, new int[] { 0,0} }, {7, new int[] { 0,0} }, {8, new int[] { 0,0} }, {9, new int[] { 0,0} }
-        };
+using System.Text.RegularExpressions;
 
-tailCoordsVisitedP1.Add("0,0", 1);
-tailCoordsVisitedP2.Add("0,0", 1);
+// var lines = File.ReadAllLines(@"../../../../../2022/Exo11/sample.txt");
+var lines = File.ReadAllLines(@"../../../../../2022/Exo11/input.txt");
 
-foreach (string s in lines)
+var monkeys = new List<Monkey>();
+for (int i = 0; i < lines.Length; i += 7)
 {
-    string[] direcitons = s.Split();
-    int distance = int.Parse(direcitons[1]);
-    for (int x = 0; x < distance; x++)
-    {
-        knotPositions[0][0] -= direcitons[0] == "L" ? 1 : 0;
-        knotPositions[0][0] += direcitons[0] == "R" ? 1 : 0;
-        knotPositions[0][1] += direcitons[0] == "U" ? 1 : 0;
-        knotPositions[0][1] -= direcitons[0] == "D" ? 1 : 0;
-        for (int i = 1; i < 10; i++)
-        {
-            if ((Math.Abs(knotPositions[i][0] - knotPositions[i - 1][0]) + Math.Abs(knotPositions[i][1] - knotPositions[i - 1][1])) == 2)
-            {
-                if (!(Math.Abs(knotPositions[i][0] - knotPositions[i - 1][0]) == 1 || Math.Abs(knotPositions[i][1] - knotPositions[i - 1][1]) == 1))
-                {
-                    knotPositions[i][0] += knotPositions[i][0] < knotPositions[i - 1][0] ? 1 : 0;
-                    knotPositions[i][0] -= knotPositions[i][0] > knotPositions[i - 1][0] ? 1 : 0;
-                    knotPositions[i][1] += knotPositions[i][1] < knotPositions[i - 1][1] ? 1 : 0;
-                    knotPositions[i][1] -= knotPositions[i][1] > knotPositions[i - 1][1] ? 1 : 0;
-                }
-            }
-            else
-            {// tail moves one step diagonally to keep up if not on the name row/col
-             // Bottom Left: move up and right
-                knotPositions[i] = (knotPositions[i][0] < knotPositions[i - 1][0] && knotPositions[i][1] < knotPositions[i - 1][1]) ? Add(knotPositions[i], new int[] { 1, 1 }) : knotPositions[i];
-                // Bottom Right: move up and left
-                knotPositions[i] = (knotPositions[i][0] > knotPositions[i - 1][0] && knotPositions[i][1] < knotPositions[i - 1][1]) ? Add(knotPositions[i], new int[] { -1, 1 }) : knotPositions[i];
-                // Top Left: move down and right
-                knotPositions[i] = (knotPositions[i][0] < knotPositions[i - 1][0] && knotPositions[i][1] > knotPositions[i - 1][1]) ? Add(knotPositions[i], new int[] { 1, -1 }) : knotPositions[i];
-                // Top Right: move down and left
-                knotPositions[i] = (knotPositions[i][0] > knotPositions[i - 1][0] && knotPositions[i][1] > knotPositions[i - 1][1]) ? Add(knotPositions[i], new int[] { -1, -1 }) : knotPositions[i];
-            }
-        }
-        if (!tailCoordsVisitedP1.ContainsKey(knotPositions[1][0] + "," + knotPositions[1][1]))
-            tailCoordsVisitedP1.Add(knotPositions[1][0] + "," + knotPositions[1][1], 1);
+    var itemStr = lines[i + 1].Split(":")[1];
+    var items = itemStr.Split(",").Select(it => int.Parse(it.Trim()));
+    var operationStr = lines[i + 2].Split("=")[1];
+    var interest = MatchOperation(operationStr.Trim());
 
-        if (!tailCoordsVisitedP2.ContainsKey(knotPositions[9][0] + "," + knotPositions[9][1]))
-            tailCoordsVisitedP2.Add(knotPositions[9][0] + "," + knotPositions[9][1], 1);
+    var moduloValue = int.Parse(Regex.Match(lines[i + 3], @"Test: divisible by (?<value>\d+)")
+        .Groups["value"].Value);
+
+    var monkeyTrue = int.Parse(Regex.Match(lines[i + 4], @"If true: throw to monkey (?<value>\d+)")
+        .Groups["value"].Value);
+
+    var monkeyFalse = int.Parse(Regex.Match(lines[i + 5], @"If false: throw to monkey (?<value>\d+)")
+        .Groups["value"].Value);
+
+    var currentMonkey = new Monkey
+    {
+        Items = new Queue<int>(),
+        NextMonkey = x => x % moduloValue == 0 ? monkeyTrue : monkeyFalse,
+        Operation = interest
+    };
+    foreach (var item in items)
+    {
+        currentMonkey.Items.Enqueue(item);
+    }
+    monkeys.Add(currentMonkey);
+}
+
+var rounds = 20;
+for (int round = 0; round < rounds; round++)
+{
+    foreach (var monkey in monkeys)
+    {
+        while (monkey.Items.TryDequeue(out var item))
+        {
+            monkey.Activity++;
+            var increasedValue = monkey.Operation(item);
+            var boredValue = increasedValue / 3;
+            var nextMonkey = monkey.NextMonkey(boredValue);
+            monkeys[nextMonkey].Items.Enqueue(boredValue);
+            
+        }
     }
 }
-Console.WriteLine("=" +
-                  "======================");
-Console.WriteLine("Day 9");
-Console.WriteLine("Part 1: {0}", tailCoordsVisitedP1.Count());
-Console.WriteLine("Part 2: {0}", tailCoordsVisitedP2.Count());
+
+var monkeyBusiness = monkeys
+    .OrderByDescending(m => m.Activity).Take(2)
+    .Aggregate(1, (previous, monkey) => previous * monkey.Activity);
+Console.WriteLine(monkeyBusiness);
 Console.ReadKey();
-static int[] Add(int[] a, int[] b)
+
+Func<int, int> MatchOperation(string operationStr)
 {
-    return new[] { a[0] + b[0], a[1] + b[1] };
+    if (operationStr.Equals("old * old"))
+    {
+        return x => x * x;
+    }
+
+    var regex = Regex.Match(operationStr, @"old (?<operator>\S) (?<value>\d+)");
+    if (regex.Success)
+    {
+        var op = regex.Groups["operator"].Value;
+        var value = int.Parse(regex.Groups["value"].Value);
+        if (op == "+")
+        {
+            return x => x + value;
+        }
+
+        if (op == "*")
+        {
+            return x => x * value;
+        }
+    }
+
+    throw new ArgumentException("invalid operationStr");
+}
+
+class Monkey
+{
+    public int Activity { get; set; } = 0;
+    public Queue<int> Items { get; set; }
+    public Func<int, int> Operation { get; set; }
+    public Func<int, int> NextMonkey { get; set; }
 }
