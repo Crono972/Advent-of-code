@@ -1,159 +1,78 @@
-// See https://aka.ms/new-console-template for more information
-
-using System.Text.RegularExpressions;
-
-// var lines = File.ReadAllLines(@"../../../../../2022/Exo11/sample.txt");
-var lines = File.ReadAllLines(@"../../../../../2022/Exo11/input.txt");
-
-var reduceInterests = new List<int>();
-
-var monkeys = new List<Monkey>();
-
-for (int i = 0; i < lines.Length; i += 7)
+namespace MyProject;
+class Program
 {
-    var itemStr = lines[i + 1].Split(":")[1];
-    var items = itemStr.Split(",").Select(it => int.Parse(it.Trim()));
-    var operationStr = lines[i + 2].Split("=")[1];
-    var interest = MatchOperation(operationStr.Trim());
-
-    var moduloValue = int.Parse(Regex.Match(lines[i + 3], @"Test: divisible by (?<value>\d+)")
-        .Groups["value"].Value);
-
-    reduceInterests.Add(moduloValue);
-    var monkeyTrue = int.Parse(Regex.Match(lines[i + 4], @"If true: throw to monkey (?<value>\d+)")
-        .Groups["value"].Value);
-
-    var monkeyFalse = int.Parse(Regex.Match(lines[i + 5], @"If false: throw to monkey (?<value>\d+)")
-        .Groups["value"].Value);
-
-    var currentMonkey = new Monkey
+    static readonly Random rand = new Random();
+    static void Main(string[] args)
     {
-        Items = new Queue<long>(),
-        NextMonkey = x => x % moduloValue == 0 ? monkeyTrue : monkeyFalse,
-        Operation = interest
+        Solve();
+    }
+
+    private record Location(char Height)
+    {
+        public bool Visited { get; set; } = false;
+    }
+    public record WayPoint(int X, int Y)
+    {
+        public WayPoint? Last { get; set; } = null;
+        public WayPoint Up => new(X, Y - 1);
+        public WayPoint Down => new(X, Y + 1);
+        public WayPoint Left => new(X - 1, Y);
+        public WayPoint Right => new(X + 1, Y);
+        public IEnumerable<WayPoint> Seen()
+        {
+            var p = Last;
+            while (p != null)
+            {
+                yield return p;
+                p = p.Last;
+            }
+        }
     };
-    foreach (var item in items)
+    public static void Solve()
     {
-        currentMonkey.Items.Enqueue(item);
-    }
+        var lines = File.ReadAllLines(@"../../../../../2022/Exo12/input.txt");
+        Location[][] ToTerrain(IEnumerable<string> list) => list.Select(l => l.Select(x => new Location(x)).ToArray()).ToArray();
 
-    monkeys.Add(currentMonkey);
-}
-
-var lcm = LcmOfArrayElements(reduceInterests.ToArray());
-var rounds = 10_000;
-for (int round = 0; round < rounds; round++)
-{
-    foreach (var monkey in monkeys)
-    {
-        while (monkey.Items.TryDequeue(out var item))
+        bool Traversable(Location[][] terrain, WayPoint from, WayPoint to, Func<char, char, bool> rule)
         {
-            monkey.Activity++;
-            var increasedValue = monkey.Operation(item);
-            var boredValue = increasedValue % lcm;
-            var nextMonkey = monkey.NextMonkey(boredValue);
-            monkeys[nextMonkey].Items.Enqueue(boredValue);
+            char NoMarker(char c) => c switch { 'S' => 'a', 'E' => 'z', _ => c };
+            if (to.X < 0 || to.X >= terrain[0].Length || to.Y < 0 || to.Y >= terrain.Length || terrain[from.Y][from.X].Visited) return false;
+            return rule(
+                NoMarker(terrain[from.Y][from.X].Height),
+                NoMarker(terrain[to.Y][to.X].Height)
+            );
         }
-    }
-}
-
-var monkeyBusiness = monkeys
-    .OrderByDescending(m => m.Activity).Take(2)
-    .Aggregate((long)1, (previous, monkey) => previous * monkey.Activity);
-Console.WriteLine(monkeyBusiness);
-Console.ReadKey();
-
-Func<long, long> MatchOperation(string operationStr)
-{
-    if (operationStr.Equals("old * old"))
-    {
-        return x => x * x;
-    }
-
-    var regex = Regex.Match(operationStr, @"old (?<operator>\S) (?<value>\d+)");
-    if (regex.Success)
-    {
-        var op = regex.Groups["operator"].Value;
-        var value = int.Parse(regex.Groups["value"].Value);
-        if (op == "+")
+        WayPoint Navigate(Location[][] terrain, char beginAt, char End, Func<char, char, bool> rule)
         {
-            return x => x + value;
-        }
-
-        if (op == "*")
-        {
-            return x => x * value;
-        }
-    }
-
-    throw new ArgumentException("invalid operationStr");
-}
-
-long LcmOfArrayElements(int[] element_array)
-{
-    long lcm_of_array_elements = 1;
-    int divisor = 2;
-
-    while (true)
-    {
-        int counter = 0;
-        bool divisible = false;
-        for (int i = 0; i < element_array.Length; i++)
-        {
-            // lcm_of_array_elements (n1, n2, ... 0) = 0.
-            // For negative number we convert into
-            // positive and calculate lcm_of_array_elements.
-            if (element_array[i] == 0)
+            var start = terrain.SelectMany((l, y) => l.Select((h, x) => new WayPoint(h.Height == beginAt ? x : -1, y))).First(p => p.X > -1);
+            Queue<WayPoint> queue = new(new[] { start });
+            int i = 0;
+            while (queue.Any())
             {
-                return 0;
+                var p = queue.Dequeue();
+                if (terrain[p.Y][p.X].Height == End) return p;
+                new[] { p.Up, p.Down, p.Left, p.Right }.Where(n => Traversable(terrain, p, n, rule)).ToList().ForEach(n =>
+                {
+                    n.Last = p;
+                    queue.Enqueue(n);
+                });
+                terrain[p.Y][p.X].Visited = true;
+                i++;
             }
-            else if (element_array[i] < 0)
-            {
-                element_array[i] *= (-1);
-            }
-
-            if (element_array[i] == 1)
-            {
-                counter++;
-            }
-
-            // Divide element_array by devisor if complete
-            // division i.e. without remainder then replace
-            // number with quotient; used for find next factor
-            if (element_array[i] % divisor == 0)
-            {
-                divisible = true;
-                element_array[i] /= divisor;
-            }
+            return null; // no way!
         }
 
-        // If divisor able to completely divide any number
-        // from array multiply with lcm_of_array_elements
-        // and store into lcm_of_array_elements and continue
-        // to same divisor for next factor finding.
-        // else increment divisor
-        if (divisible)
-        {
-            lcm_of_array_elements *= divisor;
-        }
-        else
-        {
-            divisor++;
-        }
+        var path = Navigate(ToTerrain(lines), 'S', 'E', (f, t) => f - t >= -1);
+        Console.WriteLine($"Part 1: {path.Seen().Count()}");
 
-        // Check if all element_array is 1 indicate
-        // we found all factors and terminate while loop.
-        if (counter == element_array.Length)
-        {
-            return lcm_of_array_elements;
-        }
+        var path2 = Navigate(ToTerrain(lines), 'E', 'a', (f, t) => f - t <= 1);
+        Console.WriteLine($"Part 2: {path2.Seen().Count()}");
+
     }
-}
 
-class Monkey
-{
-    public long Activity { get; set; } = 0;
-    public Queue<long> Items { get; set; }
-    public Func<long, long> Operation { get; set; }
-    public Func<long, int> NextMonkey { get; set; }
+
+    static double RandomGenerator()
+    {
+        return rand.NextDouble();
+    }
 }
