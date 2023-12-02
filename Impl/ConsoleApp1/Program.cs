@@ -16,43 +16,39 @@ public class Program
 
         int sum = 0;
 
-        var configuration = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-        {
-            { "red", 12 },
-            { "green", 13 },
-            { "blue", 14 }
-        };
-
         foreach (var line in lines)
         {
             var part = line.Split(':');
-            var gameNumber = int.Parse(part[0].Replace("Game", ""));
-            bool impossibleGame = false;
+            //var gameNumber = int.Parse(part[0].Replace("Game", ""));
+            var configuration = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
             var games = part[1].Split(';');
             foreach (var game in games)
             {
-                if (impossibleGame)
-                {
-                    break;
-                }
                 var cubes = game.Split(",");
                 foreach (var cube in cubes)
                 {
                     var cubeInfo = cube.Split(" ", StringSplitOptions.RemoveEmptyEntries);
                     var number = int.Parse(cubeInfo[0]);
                     var cubeName = cubeInfo[1];
-                    if (configuration[cubeName] < number)
+                    if (configuration.ContainsKey(cubeName))
                     {
-                        impossibleGame = true;
-                        break;
+                        configuration[cubeName] = Math.Max(number, configuration[cubeName]);
+                    }
+                    else
+                    {
+                        configuration[cubeName] = number;
                     }
                 }
             }
 
-            if (!impossibleGame)
+            var power = 1;
+            foreach (var arg in configuration)
             {
-                sum += gameNumber;
+                power *= arg.Value;
             }
+
+            sum += power;
         }
 
         Console.WriteLine(sum);
