@@ -1,4 +1,5 @@
 using System.IO.MemoryMappedFiles;
+using System.Text.RegularExpressions;
 
 namespace ConsoleApp1;
 
@@ -11,61 +12,47 @@ public class Program
 
     public static void Solve()
     {
-        var lines = File.ReadAllLines(@"../../../../../2023/Exo01/input.txt");
+        var lines = File.ReadAllLines(@"../../../../../2023/Exo02/input.txt");
 
         int sum = 0;
 
-        var args = new Dictionary<string, char>(StringComparer.OrdinalIgnoreCase)
+        var configuration = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
-            { "one", '1' },
-            { "two", '2' },
-            { "three", '3' },
-            { "four", '4' },
-            { "five", '5' },
-            { "six", '6' },
-            { "seven", '7' },
-            { "eight", '8' },
-            { "nine", '9' }
+            { "red", 12 },
+            { "green", 13 },
+            { "blue", 14 }
         };
-
-        var argsByLenghts = args.ToLookup(a => a.Key.Length);
 
         foreach (var line in lines)
         {
-            var calibrationValue = string.Empty;
-            char lastValue = 'a';
-
-            for (int i = 0; i < line.Length; i++)
+            var part = line.Split(':');
+            var gameNumber = int.Parse(part[0].Replace("Game", ""));
+            bool impossibleGame = false;
+            var games = part[1].Split(';');
+            foreach (var game in games)
             {
-                var character = line[i];
-                foreach (var arg in argsByLenghts)
+                if (impossibleGame)
                 {
-                    var left = line.Substring(i, Math.Min(line.Length - i, arg.Key));
-                    if (left.Length == arg.Key)
+                    break;
+                }
+                var cubes = game.Split(",");
+                foreach (var cube in cubes)
+                {
+                    var cubeInfo = cube.Split(" ", StringSplitOptions.RemoveEmptyEntries);
+                    var number = int.Parse(cubeInfo[0]);
+                    var cubeName = cubeInfo[1];
+                    if (configuration[cubeName] < number)
                     {
-                        foreach (var pair in arg)
-                        {
-                            if (left.Equals(pair.Key))
-                            {
-                                character = pair.Value;
-                            }
-                        }
+                        impossibleGame = true;
+                        break;
                     }
                 }
-
-                if (char.IsNumber(character))
-                {
-                    if (lastValue == 'a')
-                    {
-                        calibrationValue += character;
-                    }
-                    lastValue = character;
-                }
-
             }
 
-            calibrationValue += lastValue;
-            sum += int.Parse(calibrationValue);
+            if (!impossibleGame)
+            {
+                sum += gameNumber;
+            }
         }
 
         Console.WriteLine(sum);
