@@ -1,6 +1,3 @@
-using System.IO.MemoryMappedFiles;
-using System.Text.RegularExpressions;
-
 namespace ConsoleApp1;
 
 public class Program
@@ -10,48 +7,75 @@ public class Program
         Solve();
     }
 
+    record Num(int Value, int ColStart, int ColEnd, int Row);
+    record Symbol(char Value, int Row, int Col);
+
     public static void Solve()
     {
-        var lines = File.ReadAllLines(@"../../../../../2023/Exo02/input.txt");
+        var lines = File.ReadAllLines(@"../../../../../2023/Exo03/input.txt");
 
         int sum = 0;
 
-        foreach (var line in lines)
-        {
-            var part = line.Split(':');
-            //var gameNumber = int.Parse(part[0].Replace("Game", ""));
-            var configuration = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var nums = new List<Num>();
+        var syms = new List<Symbol>();
 
-            var games = part[1].Split(';');
-            foreach (var game in games)
+        for (int row = 0; row < lines.Length; row++)
+        {
+            var currentLine = lines[row];
+            string bufferValue = string.Empty;
+            int xStart = -1;
+            int xEnd = -1;
+
+            for (int col = 0; col < currentLine.Length; col++)
             {
-                var cubes = game.Split(",");
-                foreach (var cube in cubes)
+                if (char.IsDigit(currentLine[col]))
                 {
-                    var cubeInfo = cube.Split(" ", StringSplitOptions.RemoveEmptyEntries);
-                    var number = int.Parse(cubeInfo[0]);
-                    var cubeName = cubeInfo[1];
-                    if (configuration.ContainsKey(cubeName))
+                    if (bufferValue == string.Empty)
                     {
-                        configuration[cubeName] = Math.Max(number, configuration[cubeName]);
+                        xStart = col;
                     }
-                    else
+
+                    bufferValue += currentLine[col];
+                    xEnd = col;
+                }
+                else if (currentLine[col] == '.')
+                {
+                    if (bufferValue != string.Empty)
                     {
-                        configuration[cubeName] = number;
+                        var num = new Num(int.Parse(bufferValue), xStart, xEnd, row);
+                        nums.Add(num);
+                        bufferValue = string.Empty;
                     }
+                }
+                else
+                {
+                    syms.Add(new Symbol(currentLine[col], row, col));
                 }
             }
 
-            var power = 1;
-            foreach (var arg in configuration)
+            if (bufferValue != string.Empty)
             {
-                power *= arg.Value;
+                nums.Add(new Num(int.Parse(bufferValue), xStart, xEnd, row));
             }
-
-            sum += power;
         }
 
-        Console.WriteLine(sum);
+        var part1 = nums.Where(n => syms.Any(s => AreAdjacent(n, s))).Select(n => n.Value).Sum();
+        Console.WriteLine(part1);
     }
 
+    static bool AreAdjacent(Num number, Symbol symbol)
+    {
+        return Math.Abs(symbol.Row - number.Row) <= 1
+               && symbol.Col >= number.ColStart - 1
+               && symbol.Col <= number.ColEnd + 1;
+    }
+}
+
+public static class ExtensionsClass
+{
+    public static bool IsBetween<T>(this T item, T start, T end)
+    {
+        return Comparer<T>.Default.Compare(item, start) >= 0
+               && Comparer<T>.Default.Compare(item, end) <= 0;
+    }
 }
