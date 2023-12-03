@@ -5,6 +5,7 @@ public class Program
     static void Main(string[] args)
     {
         Solve();
+        Console.ReadKey();
     }
 
     record Num(int Value, int ColStart, int ColEnd, int Row);
@@ -66,7 +67,12 @@ public class Program
         }
 
         var part1 = nums.Where(n => syms.Any(s => AreAdjacent(n, s))).Select(n => n.Value).Sum();
+        var part2 = syms.Where(s => s.Value == '*')
+            .Select(s => nums.Where(n => AreAdjacent(n, s)).ToArray())
+            .Where(g => g.Length == 2)
+            .Sum(g => g[0].Value * g[1].Value);
         Console.WriteLine(part1);
+        Console.WriteLine(part2);
     }
 
     static bool AreAdjacent(Num number, Symbol symbol)
