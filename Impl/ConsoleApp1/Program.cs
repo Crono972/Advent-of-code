@@ -49,6 +49,12 @@ public class Program
                 }
                 else
                 {
+                    if (bufferValue != string.Empty)
+                    {
+                        var num = new Num(int.Parse(bufferValue), xStart, xEnd, row);
+                        nums.Add(num);
+                        bufferValue = string.Empty;
+                    }
                     syms.Add(new Symbol(currentLine[col], row, col));
                 }
             }
