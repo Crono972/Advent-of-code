@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace ConsoleApp1;
 
 public class Program
@@ -8,86 +10,36 @@ public class Program
         Console.ReadKey();
     }
 
-    record Num(int Value, int ColStart, int ColEnd, int Row);
-    record Symbol(char Value, int Row, int Col);
-
     public static void Solve()
     {
-        var lines = File.ReadAllLines(@"../../../../../2023/Exo03/input.txt");
+        var lines = File.ReadAllLines(@"../../../../../2023/Exo04/input.txt");
 
-        int sum = 0;
-
-        var nums = new List<Num>();
-        var syms = new List<Symbol>();
-
-        for (int row = 0; row < lines.Length; row++)
+        double part1 = 0;
+        var regex = new Regex("Card\\s+(?<CardNumber>\\d+):(?:\\s+(?<WinningNumber>\\d+))+ \\|(?:\\s+(?<Number>\\d+))+");
+        foreach (var line in lines)
         {
-            var currentLine = lines[row];
-            string bufferValue = string.Empty;
-            int xStart = -1;
-            int xEnd = -1;
-
-            for (int col = 0; col < currentLine.Length; col++)
+            var m = regex.Matches(line).First();
+            if (m.Success)
             {
-                if (char.IsDigit(currentLine[col]))
-                {
-                    if (bufferValue == string.Empty)
-                    {
-                        xStart = col;
-                    }
+                var cardNumber = m.Groups["CardNumber"].Value;
 
-                    bufferValue += currentLine[col];
-                    xEnd = col;
-                }
-                else if (currentLine[col] == '.')
-                {
-                    if (bufferValue != string.Empty)
-                    {
-                        var num = new Num(int.Parse(bufferValue), xStart, xEnd, row);
-                        nums.Add(num);
-                        bufferValue = string.Empty;
-                    }
-                }
-                else
-                {
-                    if (bufferValue != string.Empty)
-                    {
-                        var num = new Num(int.Parse(bufferValue), xStart, xEnd, row);
-                        nums.Add(num);
-                        bufferValue = string.Empty;
-                    }
-                    syms.Add(new Symbol(currentLine[col], row, col));
-                }
-            }
+                var winningNumber = m.Groups["WinningNumber"]
+                    .Captures.Select(w => int.Parse(w.Value)).ToHashSet();
 
-            if (bufferValue != string.Empty)
-            {
-                nums.Add(new Num(int.Parse(bufferValue), xStart, xEnd, row));
+                var numbers = m.Groups["Number"]
+                    .Captures.Select(w => int.Parse(w.Value)).ToList();
+
+                var wonNumbers = numbers.Where(n => winningNumber.Contains(n)).ToList();
+
+                if (wonNumbers.Any())
+                {
+                    var cardValue = Math.Pow(2, wonNumbers.Count - 1);
+                    Console.WriteLine($"Card {cardNumber} worth {cardValue}");
+                    part1 += cardValue;
+                }
             }
         }
 
-        var part1 = nums.Where(n => syms.Any(s => AreAdjacent(n, s))).Select(n => n.Value).Sum();
-        var part2 = syms.Where(s => s.Value == '*')
-            .Select(s => nums.Where(n => AreAdjacent(n, s)).ToArray())
-            .Where(g => g.Length == 2)
-            .Sum(g => g[0].Value * g[1].Value);
         Console.WriteLine(part1);
-        Console.WriteLine(part2);
-    }
-
-    static bool AreAdjacent(Num number, Symbol symbol)
-    {
-        return Math.Abs(symbol.Row - number.Row) <= 1
-               && symbol.Col >= number.ColStart - 1
-               && symbol.Col <= number.ColEnd + 1;
-    }
-}
-
-public static class ExtensionsClass
-{
-    public static bool IsBetween<T>(this T item, T start, T end)
-    {
-        return Comparer<T>.Default.Compare(item, start) >= 0
-               && Comparer<T>.Default.Compare(item, end) <= 0;
     }
 }
