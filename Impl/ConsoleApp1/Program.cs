@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-
 namespace ConsoleApp1;
 
 public class Program
@@ -12,42 +10,121 @@ public class Program
 
     public static void Solve()
     {
-        var lines = File.ReadAllLines(@"../../../../../2023/Exo04/input.txt");
-        var scratchCard = Enumerable.Repeat(1, lines.Length).ToArray();
-        double part1 = 0;
-        var regex = new Regex("Card\\s+(?<CardNumber>\\d+):(?:\\s+(?<WinningNumber>\\d+))+ \\|(?:\\s+(?<Number>\\d+))+");
-        foreach (var line in lines)
+        var lines = File.ReadAllLines(@"../../../../../2023/Exo05/input.txt");
+
+        char[] spaceOrHyphen = [' ', '-'];
+        Dictionary<string, string> mappingTypes = [];
+        List<(string sourceType, long sourceFrom, long sourceTo, long destOffset)> mappings = [];
+        long lowestDest = long.MaxValue;
+        string type = "", destType = "";
+        long[] seeds = Array.ConvertAll(lines[0].Split(' ')[1..], Convert.ToInt64);
+
+        //parsing
+        foreach (string line in lines[2..])
         {
-            var m = regex.Matches(line).First();
-            if (m.Success)
+            if (line == "") continue;
+            if (line.Contains('-'))
             {
-                var cardNumber = int.Parse(m.Groups["CardNumber"].Value);
-                var nbOfCard = scratchCard[cardNumber - 1];
-                var winningNumber = m.Groups["WinningNumber"]
-                    .Captures.Select(w => int.Parse(w.Value)).ToHashSet();
-
-                var numbers = m.Groups["Number"]
-                    .Captures.Select(w => int.Parse(w.Value)).ToList();
-
-                var wonNumbers = numbers.Where(n => winningNumber.Contains(n)).ToList();
-
-                if (wonNumbers.Any())
-                {
-                    int scratchedCardWon = cardNumber;
-                    for (int i = 0; i < wonNumbers.Count; i++)
-                    {
-                        scratchCard[scratchedCardWon] += nbOfCard;
-                        scratchedCardWon++;
-                    }
-                    var cardValue = Math.Pow(2, wonNumbers.Count - 1);
-                    Console.WriteLine($"Card {cardNumber} worth {cardValue}");
-                    part1 += cardValue;
-                }
+                string[] words = line.Split(spaceOrHyphen, StringSplitOptions.RemoveEmptyEntries);
+                type = words[0];
+                destType = words[2];
+                mappingTypes[type] = destType;
+            }
+            else
+            {
+                long[] numbers = Array.ConvertAll(line.Split([' ']), Convert.ToInt64);
+                mappings.Add((type, numbers[1], numbers[1] + numbers[2] - 1, numbers[0] - numbers[1]));
             }
         }
 
-        var part2 = scratchCard.Sum();
-        Console.WriteLine(part1);
-        Console.WriteLine(part2);
+        //Part1
+        foreach (long seedNumber in seeds)
+        {
+            type = "seed";
+            long sourceNumber = seedNumber;
+            do
+            {
+                (string sourceType, long sourceFrom, long sourceTo, long destOffset)
+                    = mappings.LastOrDefault(
+                        m => m.sourceType == type && m.sourceFrom <= sourceNumber && sourceNumber <= m.sourceTo,
+                        ("", 0, 0, 0));
+                sourceNumber += destOffset;
+                type = mappingTypes[type];
+            } while (type != "location");
+
+            lowestDest = Math.Min(lowestDest, sourceNumber);
+        }
+
+        Console.WriteLine($"Part 1: {lowestDest}");
+        lowestDest = long.MaxValue;
+        List<(long from, long to)> ranges = [];
+        for (int i = 0; i < seeds.Length; i += 2)
+        {
+            ranges.Add((seeds[i], seeds[i] + seeds[i + 1] - 1));
+        }
+
+        type = "seed";
+        do
+        {
+            ranges = GetDestRanges(ranges.OrderBy(r => r.from).ToList(),
+                [.. mappings.Where(m => m.sourceType == type).OrderBy(m => m.sourceFrom)]);
+            type = mappingTypes[type];
+        } while (type != "location");
+
+        lowestDest = Math.Min(lowestDest, ranges.Min(r => r.from));
+        Console.WriteLine($"Part 2: {lowestDest}");
+    }
+
+    public static List<(long, long)> GetDestRanges(List<(long, long)> sourceRanges,
+        List<(string sourceType, long sourceFrom, long sourceTo, long destOffset)> mappings)
+    {
+        List<(long, long)> result = [];
+        foreach ((long, long) sourceRange in sourceRanges)
+        {
+            (long from, long to) testRange = sourceRange;
+            bool allDone = false;
+            do
+            {
+                // Find the last mapping where the start is less than the start of the range
+                (string sourceType, long sourceFrom, long sourceTo, long destOffset)
+                    = mappings.LastOrDefault(m => m.sourceFrom <= testRange.from && testRange.from <= m.sourceTo,
+                        ("", 0, 0, 0));
+                // There aren't any
+                if (sourceType == "")
+                {
+                    // Does the end fit in any mappings?
+                    (sourceType, sourceFrom, sourceTo, destOffset)
+                        = mappings.LastOrDefault(m => m.sourceFrom <= testRange.to && testRange.to <= m.sourceTo,
+                            ("", 0, 0, 0));
+                    if (sourceType == "")
+                    {
+                        // If there aren't any, add the whole range and end
+                        result.Add(testRange);
+                        allDone = true;
+                    }
+                    else
+                    {
+                        // Add the start of the range, set the range to the end and continue
+                        result.Add((testRange.from, sourceFrom - 1));
+                        testRange = (sourceFrom, testRange.to);
+                    }
+                }
+                // If the end of the mapping is greater than the end of the range, add the whole range (with offset) and end
+                else if (sourceTo >= testRange.to)
+                {
+                    result.Add((testRange.from + destOffset, testRange.to + destOffset));
+                    allDone = true;
+                }
+                // Otherwise, add from the start of the range to the end of the mapping (with offsets), set the range start to the mapping end plus one and continue
+                else
+                {
+                    //sourceNumber = sourceNumber + destFrom - sourceFrom;
+                    result.Add((testRange.from + destOffset, sourceTo + destOffset));
+                    testRange = (sourceTo + 1, testRange.to);
+                }
+            } while (!allDone);
+        }
+
+        return result;
     }
 }
