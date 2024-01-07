@@ -1,64 +1,60 @@
-using System.Diagnostics;
+var input = File.ReadAllLines(@"../../../../../2023/Exo08/input.txt");
+var watch = System.Diagnostics.Stopwatch.StartNew();
+var instructions = input[0].Select(x => x == 'L' ? 0 : 1).ToArray();
+var nodes =
+    input.Skip(2)
+    .Select(x => x.Split(new[] { ' ', ',', '(', ')', '=' }, StringSplitOptions.RemoveEmptyEntries))
+    .ToDictionary(x => x[0], x => x[1..]);
 
-namespace ConsoleApp1;
+long result1 = 0;
+long result2 = 0;
 
-public class Program
-{
-    static void Main(string[] args)
-    {
-        Solve();
-        Console.ReadKey();
-    }
-
-    public static void Solve()
-    {
-        var lines = File.ReadAllLines(@"../../../../../2023/Exo08/input.txt");
-
-        var sw = Stopwatch.StartNew();
-
-        var directions = lines[0];
-
-        // var nodeMaps = new Dictionary<string, string[]>();
-
-        var nodeMaps = lines[2..]
-            .Select(l =>
-            {
-                var parts = l.Split("=", StringSplitOptions.TrimEntries
-                                         | StringSplitOptions.RemoveEmptyEntries);
-
-                var nodes = parts[1]
-                    .Replace("(", "")
-                    .Replace(")", "").Split(",", StringSplitOptions.TrimEntries
-                                                 | StringSplitOptions.RemoveEmptyEntries);
-
-                return (parts[0], nodes);
-            })
-            .ToDictionary(p => p.Item1, p => p.nodes);
-
-        var part1 = 0;
-        var currentPoint = "AAA";
-        var positionDirection = 0;
-        // while (currentPoint != "ZZZ")
-        // {
-        //     var nextDirection = directions[positionDirection] == 'R' ? 1 : 0;
-        //     part1++;
-        //     currentPoint = nodeMaps[currentPoint][nextDirection];
-        //     positionDirection = (positionDirection + 1) % directions.Length;
-        // }
-        //
-        // Console.WriteLine($"Part 1: {part1}, took {sw.Elapsed}");
-        sw.Restart();
-        long part2 = 0;
-        positionDirection = 0;
-        var currentPoints = nodeMaps.Keys.Where(k => k.EndsWith("A")).ToList();
-        while (!currentPoints.All(p => p.EndsWith("Z")))
-        {
-            var nextDirection = directions[positionDirection] == 'R' ? 1 : 0;
-            part2++;
-            currentPoints = currentPoints.Select(p => nodeMaps[p][nextDirection]).ToList();
-            positionDirection = (positionDirection + 1) % directions.Length;
-        }
-
-        Console.WriteLine($"Part 2: {part2}, took {sw.Elapsed}");
-    }
+{ // Part 1
+    for (var node = "AAA"; node != "ZZZ"; result1++)
+        node = nodes[node][instructions[result1 % instructions.Length]];
 }
+
+{ // Part2 (Utilizing loop frequency harmony)
+    var findloopFrequency = (string node) =>  // Scan until an end node is seen twice, first index is phase, index difference is period
+    {
+        var endSeen = new Dictionary<string, long>();
+        for (long i = 0; true; i++)
+        {
+            if (node[2] == 'Z')
+            {
+                if (endSeen.TryGetValue(node, out var lastSeen))
+                    return (phase: lastSeen, period: i - lastSeen);
+                else
+                    endSeen[node] = i;
+            }
+            node = nodes[node][instructions[i % instructions.Length]];
+        }
+    };
+
+    var frequencies = 
+        nodes.Keys
+        .Where(x => x[2] == 'A')
+        .Select(x => findloopFrequency(x))
+        .ToList();
+
+    // Find harmony by moving harmony phase forward and increasing harmony period until it matches all frequencies
+    var harmonyPhase = frequencies[0].phase;
+    var harmonyPeriod = frequencies[0].period;
+    foreach (var freq in frequencies.Skip(1))
+    {
+        // Find new harmonyPhase by increasing phase in harmony period steps until harmony matches freq
+        for (; harmonyPhase < freq.phase || (harmonyPhase - freq.phase) % freq.period != 0; harmonyPhase += harmonyPeriod) ;
+
+        // Find the new harmonyPeriod by looking for the next position the harmony frequency matches freq (brute force least common multiplier)
+        long sample = harmonyPhase + harmonyPeriod;
+        for (; (sample - freq.phase) % freq.period != 0; sample += harmonyPeriod) ;
+        harmonyPeriod = sample - harmonyPhase;
+    }
+    result2 = harmonyPhase;
+}
+
+watch.Stop();
+
+Console.WriteLine($"Result1 = {result1}");
+Console.WriteLine($"Result2 = {result2}");
+Console.WriteLine($"Runtime = {watch.ElapsedMilliseconds}ms");
