@@ -1,27 +1,42 @@
-var input = File.ReadAllLines(@"../../../../../2023/Exo09/input.txt");
-var watch = System.Diagnostics.Stopwatch.StartNew();
+var lines = File.ReadAllLines(@"../../../../../2024/Exo01/input.txt");
 
-var values = input
-    .Select(s => s.Split(' ').Select(int.Parse).ToArray())
-    .ToArray();
-    
-Console.WriteLine(Part1(values));
-Console.WriteLine(Part2(values));
+var firstList = new List<int>();
+var secondList = new List<int>();
 
-static int Part1(int[][] values)
+foreach (var line in lines)
 {
-    var diffs = values.Select(GetDiffs).ToList();
-    return diffs
-        .Sum(aa => aa.Sum(a => a[^1]));
+    var data = line.Split("   ");
+    firstList.Add(int.Parse(data[0]));
+    secondList.Add(int.Parse(data[1]));
 }
 
-static int Part2(int[][] values) =>
-    values.Select(GetDiffs)
-        .Sum(aa => aa.Reverse().Aggregate(0, (a, v) => v[0] - a));
+    
+Console.WriteLine(Part1(firstList, secondList));
+Console.WriteLine(Part2(firstList, secondList));
 
-static IEnumerable<int[]> GetDiffs(int[] a)
+static int Part1(List<int> first, List<int> second)
 {
-    yield return a;
-    while (a.Any(v => v != 0))
-        yield return a = a[1..].Select((v, i) => v - a[i]).ToArray();
+    int distance = 0;
+    var orderedFirst = first.OrderBy(x => x).ToList();
+    var orderedSecond = second.OrderBy(x => x).ToList();
+    for (int i = 0; i < orderedFirst.Count; i++)
+    {
+        distance += Math.Abs(orderedFirst[i] - orderedSecond[i]);
+    }
+
+    return distance;
+}
+
+static int Part2(List<int> first, List<int> second)
+{
+    var similarity = 0;
+    var occurenceSecondList = second.ToLookup(s => s);
+    for (int i = 0; i < first.Count; i++)
+    {
+        var current = first[i];
+        var simScore = occurenceSecondList.FirstOrDefault(kv => kv.Key == current)?.Count() ?? 0;
+        similarity += current * simScore;
+    }
+
+    return similarity;
 }
