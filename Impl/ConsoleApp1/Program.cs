@@ -1,25 +1,63 @@
-using System.Text.RegularExpressions;
+using System.Numerics;
+using Map = System.Collections.Immutable.ImmutableDictionary<System.Numerics.Complex, char>;
+using System.Collections.Immutable;
 
-Regex regex = new Regex(@"mul\((\d+),(\d+)\)", RegexOptions.Compiled);
+Complex Up = -Complex.ImaginaryOne;
+Complex Down = Complex.ImaginaryOne;
+Complex Left = -1;
+Complex Right = 1;
 
-var lines = File.ReadAllLines(@"../../../../../2024/Exo03/input.txt");
-var line = string.Concat(lines);
+var inputData = File.ReadAllText(@"../../../../../2024/Exo04/input.txt");
 
-Console.WriteLine(PartOne(line));
-Console.WriteLine(PartTwo(line));
+Console.WriteLine(PartOne(inputData));
+Console.WriteLine(PartTwo(inputData));
 
-int PartOne(string line)
-{
-    var matchCollection = regex.Matches(line);
-    var result = matchCollection.Select(s => int.Parse(s.Groups[1].Value) * int.Parse(s.Groups[2].Value)).Sum();
-    return result;
+object PartOne(string input) {
+    var mat = GetMap(input);
+    int count = 0;
+    foreach (Complex pt in mat.Keys)
+    foreach (var dir in new[] { Right, Right + Down, Down + Left, Down })
+    {
+        if (Matches(mat, pt, dir, "XMAS"))
+        {
+            count++;
+        }
+    }
+
+    return count;
 }
 
-int PartTwo(string line)
-{
-    var splitFirst = line.Split("don't");
-    var activated = splitFirst.Skip(1).SelectMany(s => s.Split("do").Skip(1)).ToList();
-    activated.Add(splitFirst[0]);
-    var totalActivated = string.Concat(activated);
-    return PartOne(totalActivated);
+object PartTwo(string input) {
+    var mat = GetMap(input);
+    int count = 0;
+    foreach (var pt in mat.Keys)
+    {
+        if (Matches(mat, pt + Up + Left, Down + Right, "MAS") && Matches(mat, pt + Down + Left, Up + Right, "MAS"))
+        {
+            count++;
+        }
+    }
+    return count;
+}
+
+// check if the pattern (or its reverse) can be read in the given direction 
+// starting from pt
+bool Matches(Map map, Complex pt, Complex dir, string pattern) {
+    var chars = Enumerable.Range(0, pattern.Length)
+        .Select(i => map.GetValueOrDefault(pt + i * dir))
+        .ToArray();
+    return
+        chars.SequenceEqual(pattern) ||
+        chars.SequenceEqual(pattern.Reverse());
+}
+
+// store the points in a dictionary so that we can iterate over them and 
+// to easily deal with points outside the area using GetValueOrDefault
+static Map GetMap(string input) {
+    var map = input.Split("\n");
+    return (
+        from y in Enumerable.Range(0, map.Length)
+        from x in Enumerable.Range(0, map[0].Length)
+        select new KeyValuePair<Complex, char>(Complex.ImaginaryOne * y + x, map[y][x])
+    ).ToImmutableDictionary();
 }
