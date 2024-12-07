@@ -1,60 +1,76 @@
-using System.Numerics;
-using Map = System.Collections.Generic.Dictionary<System.Numerics.Complex, char>;
+var inputData = File.ReadAllLines(@"../../../../../2024/Exo07/input.txt");
 
-var inputData = File.ReadAllLines(@"../../../../../2024/Exo06/input.txt");
+var data = inputData.Select(line => line.Split(':'))
+    .Select(kv
+        => (long.Parse(kv[0]), 
+            kv[1].Trim().Split(" ").Select(long.Parse).ToList() ))
+    .ToList();
+Console.WriteLine(PartOne(data));
+Console.WriteLine(PartTwo(data));
 
-Complex Up = Complex.ImaginaryOne;
-Complex TurnRight = -Complex.ImaginaryOne;
-Console.WriteLine(PartOne(inputData));
-Console.WriteLine(PartTwo(inputData));
-int PartOne(string[] input) {
-    var (map, start) = Parse(input);
-    return Walk(map, start).positions.Count();
+long PartOne(List<(long Result, List<long> Numbers)> list)
+{
+    List<string> operations = ["mult", "add"];
+    var validRow = list.Where(l => IsValidRow(l.Result, l.Numbers, operations)).ToList();
+    return validRow.Sum(r => r.Result);
 }
 
-int PartTwo(string[] input) {
-    var (map, start) = Parse(input);
-    var positions = Walk(map, start).positions;
-    var loops = 0;
-    // simply try a blocker in each locations visited by the guard and count the loops
-    foreach (var block in positions.Where(pos => map[pos] == '.')) {
-        map[block] = '#';
-        if (Walk(map, start).isLoop) {
-            loops++;
+long PartTwo(List<(long Result, List<long> Numbers)> list)
+{
+    List<string> operations = ["mult", "add", "concat"];
+    var validRow = list.Where(l => IsValidRow(l.Result, l.Numbers, operations)).ToList();
+    return validRow.Sum(r => r.Result);
+}
+
+bool IsValidRow(long result, List<long> numbers, List<string> operations)
+{
+    var possibleOperation = GetCombinations(operations, numbers.Count -1);
+    foreach (var operation in possibleOperation)
+    {
+        var chain = operation.ToArray();
+        var curr = numbers[0];
+        for (int i = 0; i < chain.Length; i++)
+        {
+            var operand = chain[i];
+            switch (operand)
+            {
+                case "mult":
+                    curr *= numbers[i + 1];
+                    break;
+                case "add":
+                    curr += numbers[i + 1];
+                    break;
+                case "concat":
+                    curr = long.Parse($"{curr.ToString()}" + numbers[i + 1].ToString());
+                    break;
+                default:
+                    throw new NotImplementedException();
+            }
         }
-        map[block] = '.';
-    }
-    return loops;
-}
-// store the grid in a dictionary, to make bounds checks and navigation simple
-// start represents the starting postion of the guard
-(Map map, Complex start) Parse(string[] lines) {
-    var map = (
-        from y in Enumerable.Range(0, lines.Length)
-        from x in Enumerable.Range(0, lines[0].Length)
-        select new KeyValuePair<Complex, char>(-Up * y + x, lines[y][x])
-    ).ToDictionary();
-
-    var start = map.First(x => x.Value == '^').Key;
-        
-    return (map, start);
-}
-
-// returns the positions visited when starting from 'pos', isLoop is set if the 
-// guard enters a cycle.
-(IEnumerable<Complex> positions, bool isLoop) Walk(Map map, Complex pos) {
-    var seen = new HashSet<(Complex pos, Complex dir)>();
-    var dir = Up;
-    while (map.ContainsKey(pos) && !seen.Contains((pos, dir))) {
-        seen.Add((pos, dir));
-        if (map.GetValueOrDefault(pos + dir) == '#') {
-            dir *= TurnRight;
-        } else {
-            pos += dir;
+        if (result == curr)
+        {
+            return true;
         }
     }
-    return (
-        positions: seen.Select(s => s.pos).Distinct(),
-        isLoop: seen.Contains((pos, dir))
-    );
+    return false;
+}
+
+static IEnumerable<IEnumerable<T>>
+    GetPermutations<T>(IEnumerable<T> list, int length)
+{
+    if (length == 1) return list.Select(t => new[] { t });
+
+    return GetPermutations(list, length - 1)
+        .SelectMany(t => list.Where(e => !t.Contains(e)),
+            (t1, t2) => t1.Concat([t2]));
+}
+
+
+static IEnumerable<IEnumerable<T>>
+    GetCombinations<T>(IEnumerable<T> list, int length)
+{
+    if (length == 1) return list.Select(t => new T[] { t });
+
+    return GetCombinations(list, length - 1)
+        .SelectMany(t => list, (t1, t2) => t1.Concat(new T[] { t2 }));
 }
