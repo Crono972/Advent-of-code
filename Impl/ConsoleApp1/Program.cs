@@ -1,76 +1,90 @@
-var inputData = File.ReadAllLines(@"../../../../../2024/Exo07/input.txt");
+using System.Numerics;
+using Map = System.Collections.Generic.Dictionary<System.Numerics.Complex, char>;
 
-var data = inputData.Select(line => line.Split(':'))
-    .Select(kv
-        => (long.Parse(kv[0]), 
-            kv[1].Trim().Split(" ").Select(long.Parse).ToList() ))
-    .ToList();
-Console.WriteLine(PartOne(data));
-Console.WriteLine(PartTwo(data));
+var lines = File.ReadAllLines(@"../../../../../2024/Exo08/input.txt");
 
-long PartOne(List<(long Result, List<long> Numbers)> list)
+var map = new Map();
+for (int y = 0; y < lines.Length; y++)
 {
-    List<string> operations = ["mult", "add"];
-    var validRow = list.Where(l => IsValidRow(l.Result, l.Numbers, operations)).ToList();
-    return validRow.Sum(r => r.Result);
-}
-
-long PartTwo(List<(long Result, List<long> Numbers)> list)
-{
-    List<string> operations = ["mult", "add", "concat"];
-    var validRow = list.Where(l => IsValidRow(l.Result, l.Numbers, operations)).ToList();
-    return validRow.Sum(r => r.Result);
-}
-
-bool IsValidRow(long result, List<long> numbers, List<string> operations)
-{
-    var possibleOperation = GetCombinations(operations, numbers.Count -1);
-    foreach (var operation in possibleOperation)
+    for (int x = 0; x < lines[y].Length; x++)
     {
-        var chain = operation.ToArray();
-        var curr = numbers[0];
-        for (int i = 0; i < chain.Length; i++)
+        map[x + y * Complex.ImaginaryOne] = lines[y][x];
+    }
+}
+
+Console.WriteLine(PartOne(map, lines[0].Length, lines.Length));
+Console.WriteLine(PartTwo(map, lines[0].Length, lines.Length));
+
+int PartOne(Map map, int maxX, int maxY)
+{
+    var antiNodesHash = new HashSet<Complex>();
+    var symbols = map.Values.Where(Char.IsAsciiLetterOrDigit).Distinct();
+    foreach (var symbol in symbols)
+    {
+        var coordinatesOfSymbol = map.Where(kv => kv.Value == symbol).ToList();
+        foreach (var occurence in coordinatesOfSymbol)
         {
-            var operand = chain[i];
-            switch (operand)
+            foreach (var secondOccurence in coordinatesOfSymbol)
             {
-                case "mult":
-                    curr *= numbers[i + 1];
-                    break;
-                case "add":
-                    curr += numbers[i + 1];
-                    break;
-                case "concat":
-                    curr = long.Parse($"{curr.ToString()}" + numbers[i + 1].ToString());
-                    break;
-                default:
-                    throw new NotImplementedException();
+                if (occurence.Key == secondOccurence.Key)
+                {
+                    continue;
+                }
+
+                var dir = secondOccurence.Key - occurence.Key;
+                var firstAntiNode = secondOccurence.Key + dir;
+                var secondAntiNode = occurence.Key - dir;
+                antiNodesHash.Add(firstAntiNode);
+                antiNodesHash.Add(secondAntiNode);
             }
         }
-        if (result == curr)
+    }
+
+    return antiNodesHash.Count(p => p.Real >= 0 && p.Real < maxX && p.Imaginary >= 0 && p.Imaginary < maxY);
+}
+
+int PartTwo(Map map, int maxX, int maxY)
+{
+    var antiNodesHash = new HashSet<Complex>();
+    var symbols = map.Values.Where(Char.IsAsciiLetterOrDigit).Distinct();
+    foreach (var symbol in symbols)
+    {
+        var coordinatesOfSymbol = map.Where(kv => kv.Value == symbol).ToList();
+        foreach (var occurence in coordinatesOfSymbol.ToList())
         {
-            return true;
+            foreach (var secondOccurence in coordinatesOfSymbol)
+            {
+                if (occurence.Key == secondOccurence.Key)
+                {
+                    continue;
+                }
+
+                antiNodesHash.Add(occurence.Key);
+                antiNodesHash.Add(secondOccurence.Key);
+                var dir = secondOccurence.Key - occurence.Key;
+                //first dir
+                var firstDir = secondOccurence.Key + dir;
+                while (isInBound(firstDir, maxX, maxY))
+                {
+                    antiNodesHash.Add(firstDir);
+                    firstDir += dir;
+                }
+
+                //second dir
+                var secondDir = occurence.Key - dir;
+                while (isInBound(secondDir, maxX, maxY))
+                {
+                    antiNodesHash.Add(secondDir);
+                    secondDir -= dir;
+                }
+            }
         }
     }
-    return false;
+
+    return antiNodesHash.Count;
 }
 
-static IEnumerable<IEnumerable<T>>
-    GetPermutations<T>(IEnumerable<T> list, int length)
+bool isInBound(Complex p, int maxX, int maxY)
 {
-    if (length == 1) return list.Select(t => new[] { t });
-
-    return GetPermutations(list, length - 1)
-        .SelectMany(t => list.Where(e => !t.Contains(e)),
-            (t1, t2) => t1.Concat([t2]));
-}
-
-
-static IEnumerable<IEnumerable<T>>
-    GetCombinations<T>(IEnumerable<T> list, int length)
-{
-    if (length == 1) return list.Select(t => new T[] { t });
-
-    return GetCombinations(list, length - 1)
-        .SelectMany(t => list, (t1, t2) => t1.Concat(new T[] { t2 }));
+    return p.Real >= 0 && p.Real < maxX && p.Imaginary >= 0 && p.Imaginary < maxY;
 }
