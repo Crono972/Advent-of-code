@@ -1,90 +1,116 @@
-using System.Numerics;
-using Map = System.Collections.Generic.Dictionary<System.Numerics.Complex, char>;
+var line = File.ReadAllText(@"../../../../../2024/Exo09/input.txt");
 
-var lines = File.ReadAllLines(@"../../../../../2024/Exo08/input.txt");
+var disk = Disk.Parse(line);
 
-var map = new Map();
-for (int y = 0; y < lines.Length; y++)
+// Console.WriteLine(Part1(disk));
+Console.WriteLine(Part2(disk));
+
+long Part1(Disk disk)
 {
-    for (int x = 0; x < lines[y].Length; x++)
+    var head = 0;
+    var tail = disk.Blocks.Length - 1;
+    while (head < tail)
     {
-        map[x + y * Complex.ImaginaryOne] = lines[y][x];
+        if (disk.Blocks[head] != null)
+        {
+            head++;
+            continue;
+        }
+
+        while (disk.Blocks[tail] == null) tail--;
+        disk.Blocks[head++] = disk.Blocks[tail];
+        disk.Blocks[tail--] = null;
     }
+
+    return disk.Checksum();
 }
 
-Console.WriteLine(PartOne(map, lines[0].Length, lines.Length));
-Console.WriteLine(PartTwo(map, lines[0].Length, lines.Length));
-
-int PartOne(Map map, int maxX, int maxY)
+long Part2(Disk disk)
 {
-    var antiNodesHash = new HashSet<Complex>();
-    var symbols = map.Values.Where(Char.IsAsciiLetterOrDigit).Distinct();
-    foreach (var symbol in symbols)
+    for (var fileId = disk.Allocated.Count - 1; fileId >= 0; fileId--)
     {
-        var coordinatesOfSymbol = map.Where(kv => kv.Value == symbol).ToList();
-        foreach (var occurence in coordinatesOfSymbol)
+        var file = disk.Allocated[fileId];
+        for (var j = 0; j < disk.Free.Count; j++)
         {
-            foreach (var secondOccurence in coordinatesOfSymbol)
+            var free = disk.Free[j];
+            if ((free.max - free.min +1) < file.Length || free.min >= file.Min)
             {
-                if (occurence.Key == secondOccurence.Key)
-                {
-                    continue;
-                }
-
-                var dir = secondOccurence.Key - occurence.Key;
-                var firstAntiNode = secondOccurence.Key + dir;
-                var secondAntiNode = occurence.Key - dir;
-                antiNodesHash.Add(firstAntiNode);
-                antiNodesHash.Add(secondAntiNode);
+                continue;
             }
+
+            for (var k = 0; k < file.Length; k++)
+            {
+                disk.Blocks[free.min + k] = fileId;
+                disk.Blocks[file.Min + k] = null;
+            }
+                
+            disk.Free.RemoveAt(index: j);
+            if ((free.max - free.min +1) > file.Length)
+            {
+                disk.Free.Insert(index: j, (min: free.min + file.Length, max: free.max));
+            }
+            break;
         }
     }
-
-    return antiNodesHash.Count(p => p.Real >= 0 && p.Real < maxX && p.Imaginary >= 0 && p.Imaginary < maxY);
+        
+    return disk.Checksum();
 }
 
-int PartTwo(Map map, int maxX, int maxY)
+public class Disk
 {
-    var antiNodesHash = new HashSet<Complex>();
-    var symbols = map.Values.Where(Char.IsAsciiLetterOrDigit).Distinct();
-    foreach (var symbol in symbols)
+    public readonly record struct File(int Min, int Length);
+
+    public int?[] Blocks { get; }
+    public List<File> Allocated { get; }
+    public List<(int min, int max)> Free { get; }
+
+    private Disk(int?[] blocks, List<File> allocated, List<(int min, int max)> free)
     {
-        var coordinatesOfSymbol = map.Where(kv => kv.Value == symbol).ToList();
-        foreach (var occurence in coordinatesOfSymbol.ToList())
-        {
-            foreach (var secondOccurence in coordinatesOfSymbol)
-            {
-                if (occurence.Key == secondOccurence.Key)
-                {
-                    continue;
-                }
-
-                antiNodesHash.Add(occurence.Key);
-                antiNodesHash.Add(secondOccurence.Key);
-                var dir = secondOccurence.Key - occurence.Key;
-                //first dir
-                var firstDir = secondOccurence.Key + dir;
-                while (isInBound(firstDir, maxX, maxY))
-                {
-                    antiNodesHash.Add(firstDir);
-                    firstDir += dir;
-                }
-
-                //second dir
-                var secondDir = occurence.Key - dir;
-                while (isInBound(secondDir, maxX, maxY))
-                {
-                    antiNodesHash.Add(secondDir);
-                    secondDir -= dir;
-                }
-            }
-        }
+        Blocks = blocks;
+        Allocated = allocated;
+        Free = free;
     }
 
-    return antiNodesHash.Count;
-}
+    public long Checksum()
+    {
+        return Blocks
+            .Select((file, i) => i * (file ?? 0L))
+            .Sum();
+    }
 
-bool isInBound(Complex p, int maxX, int maxY)
-{
-    return p.Real >= 0 && p.Real < maxX && p.Imaginary >= 0 && p.Imaginary < maxY;
+    public static Disk Parse(string map)
+    {
+        var volume = map.Sum(c => int.Parse(c.ToString()));
+        var blocks = new int?[volume];
+        var allocated = new List<File>();
+        var free = new List<(int min, int max)>();
+
+        var file = -1;
+        var head = 0;
+
+        for (var i = 0; i < map.Length; i++)
+        {
+            var count = int.Parse(map[i].ToString());
+            var empty = i % 2 == 1;
+
+            if (!empty)
+            {
+                file++;
+                allocated.Add(new File(Min: head, Length: count));
+            }
+            else if (count != 0)
+            {
+                free.Add((head, head + count - 1));
+            }
+
+            for (var j = 0; j < count; j++)
+            {
+                blocks[head++] = empty
+                    ? null
+                    : file;
+            }
+        }
+
+        return new Disk(blocks, allocated, free);
+    }
 }
