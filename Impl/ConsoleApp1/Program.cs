@@ -1,116 +1,114 @@
-var line = File.ReadAllText(@"../../../../../2024/Exo09/input.txt");
+using System.Numerics;
+using Map = System.Collections.Generic.Dictionary<System.Numerics.Complex, int>;
 
-var disk = Disk.Parse(line);
+Complex up = -Complex.ImaginaryOne;
+Complex down = Complex.ImaginaryOne;
+Complex left = -1;
+Complex right = 1;
 
-// Console.WriteLine(Part1(disk));
-Console.WriteLine(Part2(disk));
+var lines = File.ReadAllLines(@"../../../../../2024/Exo10/input.txt");
+Console.WriteLine(Part1(lines));
+Console.WriteLine(Part2(lines));
 
-long Part1(Disk disk)
+int Part1(string[] lines)
 {
-    var head = 0;
-    var tail = disk.Blocks.Length - 1;
-    while (head < tail)
+    var map = GenerateMap(lines);
+    var scoresOfTrailHead = new List<int>();
+    var trailHeads = map.Where(kv => kv.Value == 0).Select(kv => kv.Key).ToList();
+    var pathsRoad = GetCombinations([up, down, left, right], 9).ToList();
+    foreach (var trailHead in trailHeads)
     {
-        if (disk.Blocks[head] != null)
+        var summits = new HashSet<Complex>();
+        foreach (var path in pathsRoad)
         {
-            head++;
-            continue;
+            var currentStep = trailHead;
+            var level = 0;
+            foreach (var step in path)
+            {
+                var nextStep = currentStep + step;
+                if (!map.TryGetValue(nextStep, out var nextLevel))
+                {
+                    break;
+                }
+
+                if (nextLevel - level != 1)
+                {
+                    break;
+                }
+                level++;
+                currentStep = nextStep;
+            }
+
+            if (level == 9)
+            {
+                summits.Add(currentStep);
+            }
         }
-
-        while (disk.Blocks[tail] == null) tail--;
-        disk.Blocks[head++] = disk.Blocks[tail];
-        disk.Blocks[tail--] = null;
+        scoresOfTrailHead.Add(summits.Count);
     }
-
-    return disk.Checksum();
+    return scoresOfTrailHead.Sum();
 }
 
-long Part2(Disk disk)
+int Part2(string[] lines)
 {
-    for (var fileId = disk.Allocated.Count - 1; fileId >= 0; fileId--)
+    var map = GenerateMap(lines);
+    var ratingsOfTrailHead = new List<int>();
+    var trailHeads = map.Where(kv => kv.Value == 0).Select(kv => kv.Key).ToList();
+    var pathsRoad = GetCombinations([up, down, left, right], 9).ToList();
+    foreach (var trailHead in trailHeads)
     {
-        var file = disk.Allocated[fileId];
-        for (var j = 0; j < disk.Free.Count; j++)
+        var ratings = 0;
+        foreach (var path in pathsRoad)
         {
-            var free = disk.Free[j];
-            if ((free.max - free.min +1) < file.Length || free.min >= file.Min)
+            var currentStep = trailHead;
+            var level = 0;
+            foreach (var step in path)
             {
-                continue;
+                var nextStep = currentStep + step;
+                if (!map.TryGetValue(nextStep, out var nextLevel))
+                {
+                    break;
+                }
+
+                if (nextLevel - level != 1)
+                {
+                    break;
+                }
+                level++;
+                currentStep = nextStep;
             }
 
-            for (var k = 0; k < file.Length; k++)
+            if (level == 9)
             {
-                disk.Blocks[free.min + k] = fileId;
-                disk.Blocks[file.Min + k] = null;
+                ratings++;
             }
-                
-            disk.Free.RemoveAt(index: j);
-            if ((free.max - free.min +1) > file.Length)
-            {
-                disk.Free.Insert(index: j, (min: free.min + file.Length, max: free.max));
-            }
-            break;
         }
+        ratingsOfTrailHead.Add(ratings);
     }
-        
-    return disk.Checksum();
+    return ratingsOfTrailHead.Sum();
 }
 
-public class Disk
+
+
+Map GenerateMap(string[] lines)
 {
-    public readonly record struct File(int Min, int Length);
-
-    public int?[] Blocks { get; }
-    public List<File> Allocated { get; }
-    public List<(int min, int max)> Free { get; }
-
-    private Disk(int?[] blocks, List<File> allocated, List<(int min, int max)> free)
+    var map = new Map();
+    for (int y = 0; y < lines.Length; y++)
     {
-        Blocks = blocks;
-        Allocated = allocated;
-        Free = free;
-    }
-
-    public long Checksum()
-    {
-        return Blocks
-            .Select((file, i) => i * (file ?? 0L))
-            .Sum();
-    }
-
-    public static Disk Parse(string map)
-    {
-        var volume = map.Sum(c => int.Parse(c.ToString()));
-        var blocks = new int?[volume];
-        var allocated = new List<File>();
-        var free = new List<(int min, int max)>();
-
-        var file = -1;
-        var head = 0;
-
-        for (var i = 0; i < map.Length; i++)
+        for (int x = 0; x < lines[y].Length; x++)
         {
-            var count = int.Parse(map[i].ToString());
-            var empty = i % 2 == 1;
-
-            if (!empty)
-            {
-                file++;
-                allocated.Add(new File(Min: head, Length: count));
-            }
-            else if (count != 0)
-            {
-                free.Add((head, head + count - 1));
-            }
-
-            for (var j = 0; j < count; j++)
-            {
-                blocks[head++] = empty
-                    ? null
-                    : file;
-            }
+            map[x + y * Complex.ImaginaryOne] = int.Parse(lines[y][x].ToString());
         }
-
-        return new Disk(blocks, allocated, free);
     }
+
+    return map;
+}
+
+static IEnumerable<IEnumerable<T>>
+    GetCombinations<T>(IEnumerable<T> list, int length)
+{
+    if (length == 1) return list.Select(t => new T[] { t });
+
+    return GetCombinations(list, length - 1)
+        .SelectMany(t => list, (t1, t2) => t1.Concat(new T[] { t2 }));
 }
