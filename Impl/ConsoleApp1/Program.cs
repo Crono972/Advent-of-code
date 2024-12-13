@@ -1,123 +1,41 @@
-using System.Numerics;
-using Region = System.Collections.Generic.HashSet<System.Numerics.Complex>;
+using System.Text.RegularExpressions;
+using Machine = (Vec2 a, Vec2 b, Vec2 p);
 
-Complex Up = Complex.ImaginaryOne;
-Complex Down = -Complex.ImaginaryOne;
-Complex Left = -1;
-Complex Right = 1;
-
-var lines = File.ReadAllLines(@"../../../../../2024/Exo12/input.txt");
-
+var lines = File.ReadAllText(@"../../../../../2024/Exo13/sample.txt");
 Console.WriteLine(PartOne(lines));
 Console.WriteLine(PartTwo(lines));
 
+long PartOne(string input) => Parse(input).Sum(GetPrize);
+long PartTwo(string input) => Parse(input, shift: 10000000000000).Sum(GetPrize);
 
-long PartOne (string[] input) => CalculateFencePrice(input, discounted: false);
-long PartTwo (string[] input) => CalculateFencePrice(input, discounted: true);
+long GetPrize(Machine m) {
+    var (a, b, p) = m;
 
-int CalculateFencePrice(string[] input, bool discounted) {
-    var regions = GetRegions(input);
-    var perimeters = GetPerimeters(regions, discounted);
-    return regions.Values.Distinct().Sum(region => region.Count * perimeters[region]);
-}
+    // solve a * i + b * j = p for i and j using Cramer's rule
+    var i = Det(p, b) / Det(a, b);
+    var j = Det(a, p) / Det(a, b);
 
-// Maps the positions of plants in a garden to their corresponding regions, grouping plants 
-// of the same type into contiguous regions.
-Dictionary<Complex, Region> GetRegions(string[] input) {
-    var garden = (
-        from y in Enumerable.Range(0, input.Length)
-        from x in Enumerable.Range(0, input[0].Length)
-        select new KeyValuePair<Complex, char>(x + y * Down, input[y][x])
-    ).ToDictionary();
-
-    var res = new Dictionary<Complex, Region>();
-
-    // go over the positions of the garden and use a floodfill to determine the region
-    var positions = garden.Keys.ToHashSet();
-    while (positions.Any()) {
-        var pivot = positions.First();
-        var region = new Region { pivot };
-
-        var q = new Queue<Complex>();
-        q.Enqueue(pivot);
-
-        var plant = garden[pivot];
-
-        while (q.Any()) {
-            var point = q.Dequeue();
-            res[point] = region;
-            positions.Remove(point);
-            foreach (var dir in new[] { Up, Down, Left, Right }) {
-                if (!region.Contains(point + dir) && garden.GetValueOrDefault(point + dir) == plant) {
-                    region.Add(point + dir);
-                    q.Enqueue(point + dir);
-                }
-            }
-        }
+    // return the prize when a non negative _integer_ solution is found
+    if (i >= 0 && j >= 0 && a.x * i + b.x * j == p.x && a.y * i + b.y * j == p.y) {
+        return 3 * i + j;
+    } else {
+        return 0;
     }
-    return res;
 }
+long Det(Vec2 a, Vec2 b) => a.x * b.y - a.y * b.x;
 
-// Calculates the perimeters of all regions at once (in segments or regular units)
-Dictionary<Region, int> GetPerimeters(Dictionary<Complex, Region> map, bool segemented) {
-    var perimeters = new Dictionary<Region, int>();
-    foreach (var fence in GetFenceSegements(map)) {
-        var length = segemented ? 1 : fence.Count();
-        var region = map[fence.First()];
-        perimeters[region] = perimeters.GetValueOrDefault(region) + length;
-    }
-    return perimeters;
-}
+IEnumerable<Machine> Parse(string input, long shift=0) {
+    var blocks = input.Split("\r\n\r\n");
+    foreach (var block in blocks) {
+        var nums =
+            Regex.Matches(block, @"\d+", RegexOptions.Multiline)
+                .Select(m => int.Parse(m.Value))
+                .Chunk(2).Select(p => new Vec2(p[0], p[1]))
+                .ToArray();
 
-// Finds the positions of the straight fence segments
-IEnumerable<IEnumerable<Complex>> GetFenceSegements(Dictionary<Complex, Region> map) {
-    // the loop scans the garden four times checking if the given position has a fence up, down, 
-    // left or right maintaining when a new fence segment is to be started
-
-    foreach (var (dir, look) in new[] { (Right, Up), (Right, Down), (Down, Left), (Down, Right) }) {
-        var fence = new List<Complex>();
-
-        foreach (var line in Scan(map, dir == Right)) {
-            foreach (var position in line) {
-                // fence ends when:
-                // - we step into a different region
-                // - the position we are looking at belongs to the same region as our current region.
-                if (map[position] != map.GetValueOrDefault(position - dir) ||
-                    map[position] == map.GetValueOrDefault(position + look)
-                ) {
-                    if (fence.Any()) {
-                        yield return fence;
-                    }
-                    fence = new List<Complex>();
-                }
-
-                if (map[position] != map.GetValueOrDefault(position + look)) {
-                    fence.Add(position);
-                }
-            }
-        }
-
-        if (fence.Any()) {
-            yield return fence;
-        }
+        nums[2] = new Vec2(nums[2].x + shift, nums[2].y + shift);
+        yield return (nums[0], nums[1], nums[2]);
     }
 }
 
-// Returns horizontal or vertical scanlines of a map
-IEnumerable<IEnumerable<Complex>> Scan<T>(Dictionary<Complex, T> map, bool horiz) {
-    var du = horiz ? Right : Down;
-    var dv = horiz ? Down : Right;
-
-    var pt0 = Complex.Zero;
-    while (map.ContainsKey(pt0)) {
-        var line = new List<Complex>();
-        var pt = pt0;
-        while (map.ContainsKey(pt)) {
-            line.Add(pt);
-            pt += du;
-        }
-
-        yield return line;
-        pt0 += dv;
-    }
-}
+record struct Vec2(long x, long y);
