@@ -1,96 +1,108 @@
+using System.Collections.Immutable;
 using System.Numerics;
-
-var lines = File.ReadAllLines(@"../../../../../2024/Exo14/input.txt");
-var mapWidth = 101;
-var mapHeight = 103;
-
-Console.WriteLine(PartOne(lines));
-Console.WriteLine(PartTwo(lines));
-
-long PartOne(string[] input)
+using Map = System.Collections.Immutable.IImmutableDictionary<System.Numerics.Complex, char>;
+internal class Program
 {
-    var data = Parse(input);
-    var endTurnPosition = data.Select(r => GetPositionAfterNSeconds(r.position, r.vector, 100)).ToList();
-    var endTurnByQuadrant = endTurnPosition.ToLookup(p => QuadrantPosition(p, mapWidth, mapHeight));
-    return endTurnByQuadrant.Where(kv => kv.Key != "invalid").Aggregate(1, (acc, grouping) => acc * grouping.Count());
-}
+    static Complex Up = -Complex.ImaginaryOne;
+    static Complex Down = Complex.ImaginaryOne;
+    static Complex Left = -1;
+    static Complex Right = 1;
 
-long PartTwo(string[] input)
-{
-    var data = Parse(input);
-    var numberOfPts = data.Count;
-    var turn = 0;
-    var diffPoint = data.Select(r => r.position).ToHashSet();
-    while(diffPoint.Count != numberOfPts)
-    {
-        turn++;
-        data = data.Select(r => (GetPositionAfterNSeconds(r.position, r.vector, 1), r.vector)).ToList();
-        diffPoint = data.Select(r => r.position).ToHashSet();
-    }
-
-    for (int y = 0; y < mapHeight; y++)
-    {
-        for (int x = 0; x < mapWidth; x++)
-        {
-            Console.Write(data.Any(r => r.position == x + y * Complex.ImaginaryOne) ? "#" : ".");
-        }
-        Console.WriteLine();
-    }
+    static object PartOne(string input) => Solve(input);
+    static object PartTwo(string input) => Solve(ScaleUp(input));
     
-    return turn;
-}
+    static double Solve(string input) {
+        var (map, steps) = Parse(input);
 
-Complex GetPositionAfterNSeconds(Complex position, Complex vector, int seconds)
-{
-    var endPosition = position;
-    for (int i = 0; i < seconds; i++)
-    {
-        endPosition = ((endPosition.Real + vector.Real + mapWidth) % mapWidth) + ((endPosition.Imaginary + vector.Imaginary + mapHeight) % mapHeight) * Complex.ImaginaryOne;
-    }
-    return endPosition;
-}
-
-string QuadrantPosition(Complex position, int mapWide, int mapHeight)
-{
-    var halfWide = mapWide / 2;
-    var halfHeight = mapHeight / 2;
-    if(position.Real < halfWide)
-    {
-        if (position.Imaginary < halfHeight)
-        {
-            return "top-left";
-        } 
-        if(position.Imaginary > halfHeight)
-        {
-            return "bottom-left";
+        var robot = map.Keys.Single(k => map[k] == '@');
+        foreach (var dir in steps) {
+            if (TryToStep(ref map, robot, dir)) {
+                robot += dir;
+            }
         }
-    }
-    if(position.Real > halfWide)
-    {
-        if (position.Imaginary < halfHeight)
-        {
-            return "top-right";
-        } 
-        if(position.Imaginary > halfHeight)
-        {
-            return "bottom-right";
-        }
-    }
-    
-    return "invalid";
-}
 
-IList<(Complex position, Complex vector)> Parse(string[] input)
-{
-    var result = new List<(Complex position, Complex vector)>();
-    foreach (var line in input)
-    {
-        var parts = line.Split(" ");
-        var firstPart = parts[0].Replace("p=", "").Split(",");
-        var position = new Complex(int.Parse(firstPart[0]), int.Parse(firstPart[1]));
-        var secondPart = parts[1].Replace("v=", "").Split(",");
-        var vector = new Complex(int.Parse(secondPart[0]), int.Parse(secondPart[1]));
-        result.Add((position, vector));
+        return map.Keys
+            .Where(k => map[k] == '[' || map[k] == 'O')
+            .Sum(box => box.Real + 100 * box.Imaginary);
     }
-    return result;
+
+    // Attempts to move the robot in the given direction on the map, pushing boxes as necessary.
+    // If the move is successful, the map is updated to reflect the new positions and the function returns true.
+    // Otherwise, the map remains unchanged and the function returns false.
+    static bool TryToStep(ref Map map, Complex pos, Complex dir) {
+        var mapOrig = map;
+
+        if (map[pos] == '.') {
+            return true;
+        } else if (map[pos] == 'O' || map[pos] == '@') {
+            if (TryToStep(ref map, pos + dir, dir)) {
+                map = map
+                    .SetItem(pos + dir, map[pos])
+                    .SetItem(pos, '.');
+                return true;
+            }
+        } else if (map[pos] == ']') {
+            return TryToStep(ref map, pos + Left, dir);
+        } else if (map[pos] == '[') {
+            if (dir == Left) {
+                if (TryToStep(ref map, pos + Left, dir)) {
+                    map = map
+                        .SetItem(pos + Left, '[')
+                        .SetItem(pos, ']')
+                        .SetItem(pos + Right, '.');
+                    return true;
+                }
+            } else if (dir == Right) {
+                if (TryToStep(ref map, pos + 2 * Right, dir)) {
+                    map = map
+                        .SetItem(pos, '.')
+                        .SetItem(pos + Right, '[')
+                        .SetItem(pos + 2 * Right, ']');
+                    return true;
+                }
+            } else {
+                if (TryToStep(ref map, pos + dir, dir) && TryToStep(ref map, pos + Right + dir, dir)) {
+                    map = map
+                        .SetItem(pos, '.')
+                        .SetItem(pos + Right, '.')
+                        .SetItem(pos + dir, '[')
+                        .SetItem(pos + dir + Right, ']');
+                    return true;
+                }
+            }
+        }
+
+        map = mapOrig;
+        return false;
+    }
+
+    static string ScaleUp(string input) =>
+        input.Replace("#", "##").Replace(".", "..").Replace("O", "[]").Replace("@", "@.");
+
+    static (Map, Complex[]) Parse(string input) {
+        var blocks = input.Replace("\r\n", "\n").Split("\n\n");
+        var lines = blocks[0].Split("\n");
+        var map = (
+            from y in Enumerable.Range(0, lines.Length)
+            from x in Enumerable.Range(0, lines[0].Length)
+            select new KeyValuePair<Complex, char>(x + y * Down, lines[y][x])
+        ).ToImmutableDictionary();
+
+        var steps = blocks[1].ReplaceLineEndings("").Select(ch =>
+            ch switch {
+                '^' => Up,
+                '<' => Left,
+                '>' => Right,
+                'v' => Down,
+                _ => throw new Exception()
+            });
+
+        return (map, steps.ToArray());
+    }
+    public static void Main(string[] args)
+    {
+        var lines = File.ReadAllText(@"../../../../../2024/Exo15/input.txt");
+        Console.WriteLine(PartOne(lines));
+        Console.WriteLine(PartTwo(lines));
+    }
 }
