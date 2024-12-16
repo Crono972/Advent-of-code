@@ -1,107 +1,115 @@
 using System.Collections.Immutable;
 using System.Numerics;
 using Map = System.Collections.Immutable.IImmutableDictionary<System.Numerics.Complex, char>;
+using State = (System.Numerics.Complex pos, System.Numerics.Complex dir);
 internal class Program
 {
-    static Complex Up = -Complex.ImaginaryOne;
-    static Complex Down = Complex.ImaginaryOne;
-    static Complex Left = -1;
-    static Complex Right = 1;
+    static Complex North = -Complex.ImaginaryOne;
+    static Complex South = Complex.ImaginaryOne;
+    static Complex East = -1;
+    static Complex West = 1;
+    static readonly Complex[] Dirs = { North, East, West, South };
 
-    static object PartOne(string input) => Solve(input);
-    static object PartTwo(string input) => Solve(ScaleUp(input));
+    static long PartOne(string[] input)
+    {
+        return FindDistance(Parse(input));
+    }
+
+    static long PartTwo(string[] input)
+    {
+        return FindBestSpots(Parse(input));
+    }
     
-    static double Solve(string input) {
-        var (map, steps) = Parse(input);
-
-        var robot = map.Keys.Single(k => map[k] == '@');
-        foreach (var dir in steps) {
-            if (TryToStep(ref map, robot, dir)) {
-                robot += dir;
-            }
-        }
-
-        return map.Keys
-            .Where(k => map[k] == '[' || map[k] == 'O')
-            .Sum(box => box.Real + 100 * box.Imaginary);
+  
+    static int FindDistance(Map map) {
+        var dist = DistancesTo(map, Goal(map));
+        return dist[Start(map)];
     }
+    
+    // determines the number tiles that are on one of the shortest paths in the race.
+    static int FindBestSpots(Map map) {
+        var dist = DistancesTo(map, Goal(map));
+        var start = Start(map);
 
-    // Attempts to move the robot in the given direction on the map, pushing boxes as necessary.
-    // If the move is successful, the map is updated to reflect the new positions and the function returns true.
-    // Otherwise, the map remains unchanged and the function returns false.
-    static bool TryToStep(ref Map map, Complex pos, Complex dir) {
-        var mapOrig = map;
+        // flood fill algorithm determines the best spots by following the shortest paths 
+        // using the distance map as guideline.
 
-        if (map[pos] == '.') {
-            return true;
-        } else if (map[pos] == 'O' || map[pos] == '@') {
-            if (TryToStep(ref map, pos + dir, dir)) {
-                map = map
-                    .SetItem(pos + dir, map[pos])
-                    .SetItem(pos, '.');
-                return true;
-            }
-        } else if (map[pos] == ']') {
-            return TryToStep(ref map, pos + Left, dir);
-        } else if (map[pos] == '[') {
-            if (dir == Left) {
-                if (TryToStep(ref map, pos + Left, dir)) {
-                    map = map
-                        .SetItem(pos + Left, '[')
-                        .SetItem(pos, ']')
-                        .SetItem(pos + Right, '.');
-                    return true;
+        var q = new PriorityQueue<State, int>();
+        q.Enqueue(start, dist[start]);
+        var bestSpots = new HashSet<State> { start };
+
+        while (q.TryDequeue(out var state, out var remainingScore)) {
+            foreach (var (next, score) in Steps(map, state, forward: true)) {
+                if (bestSpots.Contains(next)) {
+                    continue;
                 }
-            } else if (dir == Right) {
-                if (TryToStep(ref map, pos + 2 * Right, dir)) {
-                    map = map
-                        .SetItem(pos, '.')
-                        .SetItem(pos + Right, '[')
-                        .SetItem(pos + 2 * Right, ']');
-                    return true;
-                }
-            } else {
-                if (TryToStep(ref map, pos + dir, dir) && TryToStep(ref map, pos + Right + dir, dir)) {
-                    map = map
-                        .SetItem(pos, '.')
-                        .SetItem(pos + Right, '.')
-                        .SetItem(pos + dir, '[')
-                        .SetItem(pos + dir + Right, ']');
-                    return true;
+                var nextScore = remainingScore - score;
+                if (dist[next] == nextScore) {
+                    bestSpots.Add(next);
+                    q.Enqueue(next, nextScore);
                 }
             }
         }
+        return bestSpots.DistinctBy(state => state.pos).Count();
+    }
+    
+    static Dictionary<State, int> DistancesTo(Map map, Complex goal) {
+        var res = new Dictionary<State, int>();
 
-        map = mapOrig;
-        return false;
+        // a flood fill algorithm, works backwards from the goal, and 
+        // computes the distances between any location in the map and the goal
+        var q = new PriorityQueue<State, int>();
+        foreach (var dir in Dirs) {
+            q.Enqueue((goal, dir), 0);
+            res[(goal, dir)] = 0;
+        }
+
+        while (q.TryDequeue(out var state, out var totalScore)) {
+            if (totalScore != res[state]) {
+                continue;
+            }
+            foreach (var (next, score) in Steps(map, state, forward: false)) {
+                var nextCost = totalScore + score;
+                if (res.ContainsKey(next) && res[next] < nextCost) {
+                    continue;
+                }
+
+                res[next] = nextCost;
+                q.Enqueue(next, nextCost);
+            }
+        }
+        return res;
+    }
+    
+    // returns the possible next or previous states and the associated costs for a given state.
+    // in forward mode we scan the possible states from the start state towards the goal.
+    // in backward mode we are working backwards from the goal to the start.
+    static IEnumerable<(State, int cost)> Steps(Map map, State state, bool forward) {
+        foreach (var dir in Dirs) {
+            if (dir == state.dir) {
+                var pos = forward ? state.pos + dir : state.pos - dir;
+                if (map.GetValueOrDefault(pos) != '#') {
+                    yield return ((pos, dir), 1);
+                }
+            } else if (dir != -state.dir) {
+                yield return ((state.pos, dir), 1000);
+            }
+        }
     }
 
-    static string ScaleUp(string input) =>
-        input.Replace("#", "##").Replace(".", "..").Replace("O", "[]").Replace("@", "@.");
+    static Map Parse(string[] input) {
+        var map = Enumerable.Range(0, input.Length)
+            .SelectMany(y => Enumerable.Range(0, input[0].Length),
+                (y, x) => new KeyValuePair<Complex, char>(x + y * South, input[y][x])).ToImmutableDictionary();
 
-    static (Map, Complex[]) Parse(string input) {
-        var blocks = input.Replace("\r\n", "\n").Split("\n\n");
-        var lines = blocks[0].Split("\n");
-        var map = (
-            from y in Enumerable.Range(0, lines.Length)
-            from x in Enumerable.Range(0, lines[0].Length)
-            select new KeyValuePair<Complex, char>(x + y * Down, lines[y][x])
-        ).ToImmutableDictionary();
-
-        var steps = blocks[1].ReplaceLineEndings("").Select(ch =>
-            ch switch {
-                '^' => Up,
-                '<' => Left,
-                '>' => Right,
-                'v' => Down,
-                _ => throw new Exception()
-            });
-
-        return (map, steps.ToArray());
+        return map;
     }
+    
+    static Complex Goal(Map map) => map.Keys.Single(k => map[k] == 'E');
+    static State Start(Map map) => (map.Keys.Single(k => map[k] == 'S'), East);
     public static void Main(string[] args)
     {
-        var lines = File.ReadAllText(@"../../../../../2024/Exo15/input.txt");
+        var lines = File.ReadAllLines(@"../../../../../2024/Exo16/input.txt");
         Console.WriteLine(PartOne(lines));
         Console.WriteLine(PartTwo(lines));
     }
