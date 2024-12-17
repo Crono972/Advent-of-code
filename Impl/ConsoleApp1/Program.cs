@@ -1,115 +1,188 @@
 using System.Collections.Immutable;
 using System.Numerics;
+using System.Text.RegularExpressions;
 using Map = System.Collections.Immutable.IImmutableDictionary<System.Numerics.Complex, char>;
 using State = (System.Numerics.Complex pos, System.Numerics.Complex dir);
+
 internal class Program
 {
-    static Complex North = -Complex.ImaginaryOne;
-    static Complex South = Complex.ImaginaryOne;
-    static Complex East = -1;
-    static Complex West = 1;
-    static readonly Complex[] Dirs = { North, East, West, South };
-
-    static long PartOne(string[] input)
+    enum Opcode
     {
-        return FindDistance(Parse(input));
+        Adv,
+        Bxl,
+        Bst,
+        Jnz,
+        Bxc,
+        Out,
+        Bdv,
+        Cdv
     }
 
-    static long PartTwo(string[] input)
+    static string Run(string input)
     {
-        return FindBestSpots(Parse(input));
+        var (state, program) = Parse(input);
+        var combo = (long op) => op < 4 ? (int)op : (int)state[op - 4];
+        var res = new List<int>();
+        for (var ip = 0; ip < program.Length; ip += 2)
+        {
+            switch ((Opcode)program[ip], program[ip + 1])
+            {
+                case (Opcode.Adv, var op): state[0] = state[0] >> combo(op); break;
+                case (Opcode.Bdv, var op): state[1] = state[0] >> combo(op); break;
+                case (Opcode.Cdv, var op): state[2] = state[0] >> combo(op); break;
+                case (Opcode.Bxl, var op): state[1] = state[1] ^ op; break;
+                case (Opcode.Bst, var op): state[1] = combo(op) % 8; break;
+                case (Opcode.Jnz, var op): ip = state[0] == 0 ? ip : (int)op - 2; break;
+                case (Opcode.Bxc, var op): state[1] = state[1] ^ state[2]; break;
+                case (Opcode.Out, var op): res.Add(combo(op) % 8); break;
+            }
+        }
+
+        return string.Join(",", res);
     }
-    
-  
-    static int FindDistance(Map map) {
-        var dist = DistancesTo(map, Goal(map));
-        return dist[Start(map)];
-    }
-    
-    // determines the number tiles that are on one of the shortest paths in the race.
-    static int FindBestSpots(Map map) {
-        var dist = DistancesTo(map, Goal(map));
-        var start = Start(map);
 
-        // flood fill algorithm determines the best spots by following the shortest paths 
-        // using the distance map as guideline.
+    /*
+        Determines register A for the given output. The search works recursively and in reverse order,
+        starting from the last number to be printed and ending with the first.
+    */
+    static IEnumerable<long> GenerateA(List<long> output)
+    {
+        if (!output.Any())
+        {
+            yield return 0;
+            yield break;
+        }
 
-        var q = new PriorityQueue<State, int>();
-        q.Enqueue(start, dist[start]);
-        var bestSpots = new HashSet<State> { start };
-
-        while (q.TryDequeue(out var state, out var remainingScore)) {
-            foreach (var (next, score) in Steps(map, state, forward: true)) {
-                if (bestSpots.Contains(next)) {
-                    continue;
-                }
-                var nextScore = remainingScore - score;
-                if (dist[next] == nextScore) {
-                    bestSpots.Add(next);
-                    q.Enqueue(next, nextScore);
+        // this loop is pretty much the assembly code of the program reimplemented in c#
+        foreach (var ah in GenerateA(output[1..]))
+        {
+            for (var al = 0; al < 8; al++)
+            {
+                var a = ah * 8 + al;
+                long b = a % 8;
+                b = b ^ 3;
+                var c = a >> (int)b;
+                b = b ^ c;
+                b = b ^ 5;
+                if (output[0] == b % 8)
+                {
+                    yield return a;
                 }
             }
         }
-        return bestSpots.DistinctBy(state => state.pos).Count();
     }
-    
-    static Dictionary<State, int> DistancesTo(Map map, Complex goal) {
-        var res = new Dictionary<State, int>();
 
-        // a flood fill algorithm, works backwards from the goal, and 
-        // computes the distances between any location in the map and the goal
-        var q = new PriorityQueue<State, int>();
-        foreach (var dir in Dirs) {
-            q.Enqueue((goal, dir), 0);
-            res[(goal, dir)] = 0;
-        }
-
-        while (q.TryDequeue(out var state, out var totalScore)) {
-            if (totalScore != res[state]) {
-                continue;
-            }
-            foreach (var (next, score) in Steps(map, state, forward: false)) {
-                var nextCost = totalScore + score;
-                if (res.ContainsKey(next) && res[next] < nextCost) {
-                    continue;
-                }
-
-                res[next] = nextCost;
-                q.Enqueue(next, nextCost);
+    static List<long> CursedDfs(List<long> operands, long curVal, int depth)
+    {
+        List<long> res = new();
+        if (depth > operands.Count) return res;
+        var tmp = curVal << 3;
+        for (int i = 0; i < 8; i++)
+        {
+            var tmpRes = RunProgram(tmp + i, operands);
+            if (tmpRes.SequenceEqual(operands.TakeLast(depth + 1)))
+            {
+                if (depth + 1 == operands.Count) res.Add(tmp + i);
+                res.AddRange(CursedDfs(operands, tmp + i, depth + 1));
             }
         }
+
         return res;
     }
-    
-    // returns the possible next or previous states and the associated costs for a given state.
-    // in forward mode we scan the possible states from the start state towards the goal.
-    // in backward mode we are working backwards from the goal to the start.
-    static IEnumerable<(State, int cost)> Steps(Map map, State state, bool forward) {
-        foreach (var dir in Dirs) {
-            if (dir == state.dir) {
-                var pos = forward ? state.pos + dir : state.pos - dir;
-                if (map.GetValueOrDefault(pos) != '#') {
-                    yield return ((pos, dir), 1);
-                }
-            } else if (dir != -state.dir) {
-                yield return ((state.pos, dir), 1000);
+
+    static List<long> RunProgram(long regA, List<long> operands)
+    {
+        long regB = 0;
+        long regC = 0;
+        List<long> output = new();
+        int pc = 0;
+        while (pc < operands.Count)
+        {
+            long combo = (operands[pc + 1]) switch
+            {
+                0 => 0,
+                1 => 1,
+                2 => 2,
+                3 => 3,
+                4 => regA,
+                5 => regB,
+                6 => regC,
+                _ => long.MinValue
+            };
+
+            long literal = operands[pc + 1];
+            long res = 0;
+            bool jumped = false;
+            switch (operands[pc])
+            {
+                case 0:
+                    res = (long)(regA / Math.Pow(2, combo));
+                    regA = res;
+                    break;
+                case 1:
+                    res = regB ^ literal;
+                    regB = res;
+                    break;
+                case 2:
+                    res = combo % 8;
+                    regB = res;
+                    break;
+                case 3:
+                    if (regA != 0)
+                    {
+                        pc = (int)literal;
+                        jumped = true;
+                    }
+
+                    break;
+                case 4:
+                    res = regB ^ regC;
+                    regB = res;
+                    break;
+                case 5:
+                    output.Add(combo % 8);
+                    break;
+                case 6:
+                    res = (long)(regA / Math.Pow(2, combo));
+                    regB = res;
+                    break;
+                case 7:
+                    res = (long)(regA / Math.Pow(2, combo));
+                    regC = res;
+                    break;
+                default: break;
             }
+
+            if (!jumped) pc += 2;
+            if (output.Count > operands.Count) break;
         }
+
+        return output;
     }
 
-    static Map Parse(string[] input) {
-        var map = Enumerable.Range(0, input.Length)
-            .SelectMany(y => Enumerable.Range(0, input[0].Length),
-                (y, x) => new KeyValuePair<Complex, char>(x + y * South, input[y][x])).ToImmutableDictionary();
-
-        return map;
+    static (long[] state, long[] program) Parse(string input)
+    {
+        var blocks = input.Replace("\r\n", "\n").Split("\n\n").Select(ParseNums).ToArray();
+        return (blocks[0], blocks[1]);
     }
-    
-    static Complex Goal(Map map) => map.Keys.Single(k => map[k] == 'E');
-    static State Start(Map map) => (map.Keys.Single(k => map[k] == 'S'), East);
+
+    static long[] ParseNums(string st) =>
+        Regex.Matches(st, @"\d+", RegexOptions.Multiline)
+            .Select(m => long.Parse(m.Value))
+            .ToArray();
+
+    static object PartOne(string input) => Run(input);
+    // static object PartTwo(string input) => GenerateA(Parse(input).program.ToList()).Min();
+
+    static long PartTwo(string input)
+    {
+        var (state, program) = Parse(input);
+        return CursedDfs(program.ToList(), 0, 0).Min();
+    }
+
     public static void Main(string[] args)
     {
-        var lines = File.ReadAllLines(@"../../../../../2024/Exo16/input.txt");
+        var lines = File.ReadAllText(@"../../../../../2024/Exo17/input.txt");
         Console.WriteLine(PartOne(lines));
         Console.WriteLine(PartTwo(lines));
     }
