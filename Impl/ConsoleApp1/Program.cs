@@ -1,66 +1,96 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Numerics;
 using System.Text.RegularExpressions;
-using Map = System.Collections.Immutable.IImmutableDictionary<System.Numerics.Complex, char>;
-using State = (System.Numerics.Complex pos, System.Numerics.Complex dir);
-
+using Cache = System.Collections.Concurrent.ConcurrentDictionary<(char currentKey, char nextKey, int depth), long>;
+using Keypad = System.Collections.Generic.Dictionary<Vec2, char>;
+record struct Vec2(int x, int y);
 internal class Program
 {
-    static object PartOne(string[] input) => Solve(input, 2);
+     static object PartOne(string input) => Solve(input, 2);
 
-    static object PartTwo(string[] input) => Solve(input, 20);
+     static object PartTwo(string input) => Solve(input, 25);
+    
+     static long Solve(string input, int depth) {
+        var keypad1 = ParseKeypad("789\n456\n123\n 0A");
+        var keypad2 = ParseKeypad(" ^A\n<v>");
+        var keypads = Enumerable.Repeat(keypad2, depth).Prepend(keypad1).ToArray();
 
-    static int Solve(string[] input, int cheat) {
-        var path = GetPath(input);
-        var indices = Enumerable.Range(0, path.Length).ToArray();
+        var cache = new Cache();
+        var res = 0L;
 
-        // sum up the worthy cheats for each index along the path
-        var cheatsFromI = (int i) => (
-            from j in indices[0..i]
-            let dist = Manhattan(path[i], path[j])
-            let saving = i - (j + dist) 
-            where dist <= cheat && saving >= 100
-            select 1
-        ).Sum();
-
-        // parallel is gold today, it gives us an 3-4x boost
-        return indices.AsParallel().Select(cheatsFromI).Sum();
-    }
-
-    static int Manhattan(Complex a, Complex b) =>
-        (int)(Math.Abs(a.Imaginary - b.Imaginary) + Math.Abs(a.Real - b.Real));
-
-    // Follow the path from finish to start, supposed that there is a single track in the input.
-    // The index of a position in the returned array equals to its distance from the finish
-    static Complex[] GetPath(string[] input) {
-        var map = (
-            from y in Enumerable.Range(0, input.Length)
-            from x in Enumerable.Range(0, input[0].Length)
-            select new KeyValuePair<Complex, char>(x + y * Complex.ImaginaryOne, input[y][x])
-        ).ToDictionary();
-
-        Complex[] dirs = [-1, 1, Complex.ImaginaryOne, -Complex.ImaginaryOne];
-
-        var start = map.Keys.Single(k => map[k] == 'S');
-        var goal = map.Keys.Single(k => map[k] == 'E');
-
-        var prev = (Complex?)null;
-        var cur = goal;
-        var res = new List<Complex> { cur };
-
-        while (cur != start) {
-            var dir = dirs.Single(dir => map[cur + dir] != '#' && cur + dir != prev);
-            prev = cur;
-            cur += dir;
-            // (prev, cur) = (cur, cur + dir);
-            res.Add(cur);
+        foreach (var line in input.Replace("\r\n", "\n").Split("\n")) {
+            var num = int.Parse(line[..^1]);
+            res += num * EncodeKeys(line, keypads, cache);
         }
-        return res.ToArray();
+        return res;
     }
+
+    // Determines the length of the shortest sequence that is needed to enter the given 
+    // keys. An empty keypad array means that the sequence is simply entered by a human 
+    // and no further encoding is needed. Otherwise the sequence is entered by a robot
+    // which needs to be programmed. In practice this means that the keys are encoded 
+    // using the robots keypad (the first keypad), generating an other sequence of keys.
+    // This other sequence is then recursively encoded using the rest of the keypads.
+    static long EncodeKeys(string keys, Keypad[] keypads, Cache cache) {
+        if (keypads.Length == 0) {
+            return keys.Length;
+        } else {
+            // invariant: the robot starts and finishes by pointing at the 'A' key
+            var currentKey = 'A';
+            var length = 0L;
+
+            foreach (var nextKey in keys) {
+                length += EncodeKey(currentKey, nextKey, keypads, cache);
+                // while the sequence is entered the current key changes accordingly
+                currentKey = nextKey;
+            }
+
+            // at the end the current key should be reset to 'A'
+            Debug.Assert(currentKey == 'A', "The robot should point at the 'A' key");
+            return length;
+        }
+    }
+    static long EncodeKey(char currentKey, char nextKey, Keypad[] keypads, Cache cache) =>
+       cache.GetOrAdd((currentKey, nextKey, keypads.Length), _ => {
+           var keypad = keypads[0];
+
+           var currentPos = keypad.Single(kvp => kvp.Value == currentKey).Key;
+           var nextPos = keypad.Single(kvp => kvp.Value == nextKey).Key;
+
+           var dy = nextPos.y - currentPos.y;
+           var vert = new string(dy < 0 ? 'v' : '^', Math.Abs(dy));
+
+           var dx = nextPos.x - currentPos.x;
+           var horiz = new string(dx < 0 ? '<' : '>', Math.Abs(dx));
+
+           var cost = long.MaxValue;
+           // we can usually go vertical first then horizontal or vica versa,
+           // but we should check for the extra condition and don't position
+           // the robot over the ' ' key:
+           if (keypad[new Vec2(currentPos.x, nextPos.y)] != ' ') {
+               cost = Math.Min(cost, EncodeKeys($"{vert}{horiz}A", keypads[1..], cache));
+           }
+
+           if (keypad[new Vec2(nextPos.x, currentPos.y)] != ' ') {
+               cost = Math.Min(cost, EncodeKeys($"{horiz}{vert}A", keypads[1..], cache));
+           }
+           return cost;
+       });
+
+    static Keypad ParseKeypad(string keypad) {
+        var lines = keypad.Split("\n");
+        return (
+            from y in Enumerable.Range(0, lines.Length)
+            from x in Enumerable.Range(0, lines[0].Length)
+            select new KeyValuePair<Vec2, char>(new Vec2(x, -y), lines[y][x])
+        ).ToDictionary();
+    }
+    
     public static void Main(string[] args)
     {
-        var lines = File.ReadLines(@"../../../../../2024/Exo20/input.txt").ToArray();
+        var lines = File.ReadAllText(@"../../../../../2024/Exo21/input.txt");
         Console.WriteLine(PartOne(lines));
         Console.WriteLine(PartTwo(lines));
     }
