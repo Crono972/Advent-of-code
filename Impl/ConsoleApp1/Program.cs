@@ -1,73 +1,60 @@
-internal class Program
+using System.Collections.Frozen;
+
+var lines = File.ReadAllText(@"../../../../../2024/Exo23/input.txt");
+
+Console.WriteLine($"PartOne : {PartOne(lines)}");
+Console.WriteLine($"PartTwo : {PartTwo(lines)}");
+
+long PartOne(string input)
 {
-    static object PartOne(string input)
+    var g = GetGraph(input);
+    var components = GetSeed(g);
+    components = Grow(g, components);
+    components = Grow(g, components);
+    return components.Count(c => Members(c).Any(m => m.StartsWith("t")));
+}
+
+object PartTwo(string input)
+{
+    var g = GetGraph(input);
+    var components = GetSeed(g);
+    while (components.Count > 1)
     {
-        return GetNums(input).Select(x => (long)SecretNumbers(x).Last()).Sum();
+        components = Grow(g, components);
     }
 
-    static object PartTwo(string input)
-    {
-        // create a dictionary of all buying options then select the one with the most banana:
+    return components.Single();
+}
 
-        var buyingOptions = new Dictionary<string, int>();
-        foreach (var num in GetNums(input))
-        {
-            var optionsBySeller = BuyingOptions(num);
-            foreach (var seq in optionsBySeller.Keys)
-            {
-                buyingOptions[seq] = buyingOptions.GetValueOrDefault(seq) + optionsBySeller[seq];
-            }
-        }
+HashSet<string> GetSeed(Dictionary<string, HashSet<string>> g) => g.Keys.ToHashSet();
 
-        return buyingOptions.Values.Max();
-    }
+HashSet<string> Grow(Dictionary<string, HashSet<string>> g, HashSet<string> components) => (
+    from c in components.AsParallel()
+    let members = Members(c)
+    from neighbour in members.SelectMany(m => g[m]).Distinct()
+    where !members.Contains(neighbour)
+    where members.All(m => g[neighbour].Contains(m))
+    select Extend(c, neighbour)
+).ToHashSet();
 
-    static Dictionary<string, int> BuyingOptions(int seed)
-    {
-        var bananasSold = Bananas(seed).ToArray();
+IEnumerable<string> Members(string c) =>
+    c.Split(",");
 
-        var buyOptions = new Dictionary<string, int>();
+string Extend(string c, string item) =>
+    string.Join(",", Members(c).Append(item).OrderBy(x => x));
 
-        // a sliding window of 5 elements over the sold bananas defines the sequence the monkey 
-        // will recognize. add the first occurrence of each sequence to the buyOptions dictionary 
-        // with the corresponding banana count
-        for (var i = 5; i < bananasSold.Length; i++)
-        {
-            var slice = bananasSold[(i - 5) .. i];
-            var seq = string.Join(",", Diff(slice));
-            if (!buyOptions.ContainsKey(seq))
-            {
-                buyOptions[seq] = slice[^1];
-            }
-        }
+Dictionary<string, HashSet<string>> GetGraph(string input)
+{
+    var edges =
+        from line in input.Replace("\r\n", "\n").Split("\n")
+        let nodes = line.Split("-")
+        from edge in new[] { (nodes[0], nodes[1]), (nodes[1], nodes[0]) }
+        select (From: edge.Item1, To: edge.Item2);
 
-        return buyOptions;
-    }
-
-    static int[] Bananas(int seed) => SecretNumbers(seed).Select(n => n % 10).ToArray();
-
-    static int[] Diff(IEnumerable<int> x) => x.Zip(x.Skip(1)).Select(p => p.Second - p.First).ToArray();
-
-    static IEnumerable<int> SecretNumbers(int seed)
-    {
-        var mixAndPrune = (int a, long b) => (int)((a ^ b) % 16777216);
-
-        yield return seed;
-        for (var i = 0; i < 2000; i++)
-        {
-            seed = mixAndPrune(seed, seed * 64L);
-            seed = mixAndPrune(seed, seed / 32L);
-            seed = mixAndPrune(seed, seed * 2048L);
-            yield return seed;
-        }
-    }
-
-    static IEnumerable<int> GetNums(string input) => input.Replace("\r\n", "\n").Split("\n").Select(int.Parse);
-
-    public static void Main(string[] args)
-    {
-        var lines = File.ReadAllText(@"../../../../../2024/Exo22/input.txt");
-        Console.WriteLine(PartOne(lines));
-        Console.WriteLine(PartTwo(lines));
-    }
+    return (
+        from e in edges
+        group e by e.From
+        into g
+        select (g.Key, g.Select(e => e.To).ToHashSet())
+    ).ToDictionary();
 }
