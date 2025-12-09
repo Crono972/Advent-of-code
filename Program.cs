@@ -1,80 +1,70 @@
 ﻿using AdventOfCode.Impl._2025;
 using AdventOfCode.Shared;
+using System.Numerics;
 
-var input = File.ReadAllLines(@"Input\2025\Exo08\input.txt");
+var input = File.ReadAllLines(@"Input\2025\Exo09\input.txt");
 
-var solver = new Solver2025Exo8();
+var solver = new Solver2025Exo9();
 var result = solver.SolvePart1(input);
 Console.WriteLine("1st part: " + result);
 result = solver.SolvePart2(input);
 Console.WriteLine("2nd part: " + result);
 Console.ReadLine();
 
-public class Solver2025Exo8 : ISolver
+public class Solver2025Exo9 : ISolver
 {
-    record Point(decimal x, decimal y, decimal z);
+    record Rectangle(long top, long left, long bottom, long right);
+    IEnumerable<Rectangle> RectanglesOrderedByArea(Complex[] points) =>
+        points.SelectMany(p1 => points, (p1, p2) => new { p1, p2 })
+            .Select(pts =>  RectangleFromPoints(pts.p1, pts.p2) )
+            .OrderByDescending(Area)
+            .Select(r => r);
 
+    IEnumerable<Rectangle> Boundary(Complex[] corners) =>
+        from pair in corners.Zip(corners.Prepend(corners.Last()))
+        select RectangleFromPoints(pair.First, pair.Second);
+
+    Rectangle RectangleFromPoints(Complex p1, Complex p2)
+    {
+        var top = Math.Min(p1.Imaginary, p2.Imaginary);
+        var bottom = Math.Max(p1.Imaginary, p2.Imaginary);
+        var left = Math.Min(p1.Real, p2.Real);
+        var right = Math.Max(p1.Real, p2.Real);
+        return new Rectangle((long)top, (long)left, (long)bottom, (long)right);
+    }
+
+    Complex[] Parse(string[] lines) => lines
+        .Select(line => new { line, parts = line.Split(",").Select(int.Parse).ToArray() })
+        .Select(@t => @t.parts[0] + Complex.ImaginaryOne * @t.parts[1]).ToArray();
+
+    long Area(Rectangle r) => (r.bottom - r.top + 1) * (r.right - r.left + 1);
+
+    // see https://kishimotostudios.com/articles/aabb_collision/
+    bool AabbCollision(Rectangle a, Rectangle b)
+    {
+        var aIsToTheLeft = a.right <= b.left;
+        var aIsToTheRight = a.left >= b.right;
+        var aIsAbove = a.bottom <= b.top;
+        var aIsBelow = a.top >= b.bottom;
+        return !(aIsToTheRight || aIsToTheLeft || aIsAbove || aIsBelow);
+    }
     public string SolvePart1(string[] lines)
     {
-        // Apply 1000 steps of Kruskal's algorithm to the points using the specified
-        // metric, then return the product of the sizes of the three largest components.
         var points = Parse(lines);
-        var setOf = points.ToDictionary(p => p, p => new HashSet<Point>([p]));
-        foreach (var (a, b) in GetOrderedPairs(points).Take(1000))
-        {
-            if (setOf[a] != setOf[b])
-            {
-                Connect(a, b, setOf);
-            }
-        }
-        return setOf.Values.Distinct()
-            .OrderByDescending(set => set.Count)
-            .Take(3)
-            .Aggregate(1, (a, b) => a * b.Count).ToString();
+        return (
+            from r in RectanglesOrderedByArea(points)
+            select Area(r)
+        ).First().ToString();
     }
 
     public string SolvePart2(string[] lines)
     {
-        // Run Kruskal's algorithm on all points and return the product of the
-        // x-coordinates of the last edge added to the spanning tree.
         var points = Parse(lines);
-        var componentCount = points.Length;
-        var setOf = points.ToDictionary(p => p, p => new HashSet<Point>([p]));
-        var res = 0m;
-        foreach (var (a, b) in GetOrderedPairs(points).TakeWhile(_ => componentCount > 1))
-        {
-            if (setOf[a] != setOf[b])
-            {
-                Connect(a, b, setOf);
-                res = a.x * b.x;
-                componentCount--;
-            }
-        }
-        return res.ToString();
+        var segments = Boundary(points).ToArray();
+        return (
+            from r in RectanglesOrderedByArea(points)
+            where segments.All(s => !AabbCollision(r, s))
+            select Area(r)
+        ).First().ToString();
     }
-
-    void Connect(Point a, Point b, Dictionary<Point, HashSet<Point>> setOf)
-    {
-        setOf[a].UnionWith(setOf[b]);
-        foreach (var p in setOf[b])
-        {
-            setOf[p] = setOf[a];
-        }
-    }
-
-    IEnumerable<(Point a, Point b)> GetOrderedPairs(Point[] points) =>
-        from a in points
-        from b in points
-        where (a.x, a.y, a.z).CompareTo((b.x, b.y, b.z)) < 0
-        orderby Metric(a, b)
-        select (a, b);
-
-    decimal Metric(Point a, Point b) =>
-        (a.x - b.x) * (a.x - b.x) +
-        (a.y - b.y) * (a.y - b.y) +
-        (a.z - b.z) * (a.z - b.z);
-
-    Point[] Parse(string[] lines) => (lines
-        .Select(line => line.Split(",").Select(int.Parse).ToArray() )
-        .Select(parts => new Point(parts[0], parts[1], parts[2]))).ToArray();
 }
